@@ -57,8 +57,4 @@ Si querés clonar este proyecto y probarlo en tu máquina:
 
 **Valentino** Estudiante de Tecnicatura en Programación / Desarrollo de Software.
 
-- LinkedIn: [Tu Enlace a LinkedIn]
 - GitHub: [@vxlentino](https://github.com/vxlentino)
-  ```
-
-  ```
