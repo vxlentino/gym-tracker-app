@@ -1,50 +1,36 @@
-# Welcome to your Expo app 👋
+# Gym APP
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Una aplicación móvil desarrollada en **React Native / Expo** pensada para registrar entrenamientos de fuerza, gestionar rutinas personalizadas y controlar los tiempos de descanso con precisión milimétrica, incluso en segundo plano.
 
-## Get started
+![Demostracion de la notificacion](assets/images/capturas/demo.png)
 
-1. Install dependencies
+## Características Principales
 
+- **Cronómetros Nativos Infalibles:** Integración con `expo-notifications` para gestionar los tiempos de descanso usando `TIME_INTERVAL`, asegurando que la alarma suene siempre, sin importar las restricciones de batería de Android (Doze Mode).
+- **Gestión de Rutinas y Ejercicios:** Creación, edición y eliminación de rutinas. Opción de agregar ejercicios personalizados con fotos desde la galería de tu teléfono.
+- **Persistencia de Datos Local:** Uso extensivo de `AsyncStorage` para guardar el historial de entrenamientos, progreso, volumen total y configuraciones del usuario sin necesidad de internet.
+- **Interfaz Dinámica e Intuitiva:** Listas reordenables (Drag & Drop), animaciones de "Swipe to delete" y un perfil dinámico que saluda al usuario por su nombre.
+
+## Tecnologías Utilizadas
+
+- **Framework:** React Native / Expo
+- **Lenguaje:** TypeScript
+- **Almacenamiento:** AsyncStorage (Local Storage)
+- **Librerías Clave:** \* `expo-notifications` (Manejo de alertas nativas)
+  - `expo-image-picker` (Acceso a galería)
+  - `react-native-draggable-flatlist` (Reordenamiento de listas)
+
+## Capturas de Pantalla
+
+|                    Inicio & Rutinas                     |                     Cronómetro Activo                      |                     Perfil del Atleta                     |
+| :-----------------------------------------------------: | :--------------------------------------------------------: | :-------------------------------------------------------: |
+| <img src="assets/images/capturas/home.png" width="250"> | <img src="assets/images/capturas/entreno.png" width="250"> | <img src="assets/images/capturas/perfil.png" width="250"> |
+
+## 🚀 Cómo ejecutar el proyecto localmente
+
+Si querés probar la aplicación en tu propia máquina, seguí estos pasos:
+
+1. Cloná el repositorio:
    ```bash
-   npm install
+   git clone [https://github.com/TU-USUARIO/TU-REPO.git](https://github.com/TU-USUARIO/TU-REPO.git)
    ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
