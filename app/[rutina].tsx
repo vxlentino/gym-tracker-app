@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import DraggableFlatList, {
   ScaleDecorator,
@@ -75,8 +75,18 @@ export default function PantallaRutina() {
   const [nuevoMusculoEjercicio, setNuevoMusculoEjercicio] = useState("Piernas");
   const [nuevoMediaUrl, setNuevoMediaUrl] = useState("");
   const [nuevaDescripcion, setNuevaDescripcion] = useState("");
-  const [nuevosMusculosSecundarios, setNuevosMusculosSecundarios] =
-    useState("");
+  const [nuevosMusculosSecundarios, setNuevosMusculosSecundarios] = useState<
+    string[]
+  >([]);
+  const toggleMusculoSecundario = (musculo: string) => {
+    if (nuevosMusculosSecundarios.includes(musculo)) {
+      setNuevosMusculosSecundarios(
+        nuevosMusculosSecundarios.filter((m) => m !== musculo),
+      );
+    } else {
+      setNuevosMusculosSecundarios([...nuevosMusculosSecundarios, musculo]);
+    }
+  };
 
   const [rutinaActiva, setRutinaActiva] = useState(false);
   const [tiempoGlobal, setTiempoGlobal] = useState(0);
@@ -164,16 +174,15 @@ export default function PantallaRutina() {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "¡Descanso terminado! 🏋️‍♂️",
-          // USAMOS BACKTICKS (`) PARA INYECTAR LA VARIABLE
           body: `Es hora de la siguiente serie, ${nombreUsuario}.`,
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
         },
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, // LA PALABRA MÁGICA
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds: tiempoEnSegundos,
           channelId: "default",
-        } as any, // Le dejamos el as any por las dudas para que TypeScript no moleste con el channelId
+        } as any, // EL SALVAVIDAS
       });
     }
   };
@@ -311,11 +320,12 @@ export default function PantallaRutina() {
       Alert.alert("Error", "El ejercicio debe tener un nombre obligatorio.");
       return;
     }
-    const musculosExtra = nuevosMusculosSecundarios
-      .split(",")
-      .map((m) => m.trim())
-      .filter((m) => m !== "");
-    const todosLosMusculos = [nuevoMusculoEjercicio, ...musculosExtra];
+
+    // COMO YA ES UNA LISTA, DIRECTAMENTE LA JUNTAMOS CON EL MÚSCULO PRINCIPAL
+    const todosLosMusculos = [
+      nuevoMusculoEjercicio,
+      ...nuevosMusculosSecundarios,
+    ];
 
     const nuevoEj = {
       id: ejercicioEditandoId ? ejercicioEditandoId : `custom_${Date.now()}`,
@@ -344,6 +354,7 @@ export default function PantallaRutina() {
     }
     setModalCrearEjercicioVisible(false);
     setEjercicioEditandoId(null);
+    setNuevosMusculosSecundarios([]); // Limpiamos las pastillas para el próximo ejercicio
   };
 
   const eliminarEjercicioDeDB = (idCustom: string) => {
@@ -612,6 +623,7 @@ export default function PantallaRutina() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -685,6 +697,16 @@ export default function PantallaRutina() {
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 150 }}
+            ListFooterComponent={
+              <TouchableOpacity
+                style={styles.botonAgregarEjercicioFlotante}
+                onPress={() => setModalVisible(true)}
+              >
+                <Text style={styles.textoBotonEjercicio}>
+                  + Añadir Ejercicio
+                </Text>
+              </TouchableOpacity>
+            }
             renderItem={({ item, index }) => {
               const descansoActual =
                 item.descanso !== undefined ? item.descanso : 120;
@@ -701,17 +723,11 @@ export default function PantallaRutina() {
                       style={styles.contenedorNombreImagen}
                       onPress={() => setEjercicioDetalle(datosCompletos)}
                     >
-                      {urlMiniatura ? (
+                      {/* Si hay miniatura dibuja la imagen, sino no hace nada */}
+                      {urlMiniatura && (
                         <Image
                           source={{ uri: urlMiniatura }}
                           style={styles.imagenMini}
-                        />
-                      ) : (
-                        <View
-                          style={[
-                            styles.imagenMini,
-                            { backgroundColor: COLORES.fondoInput },
-                          ]}
                         />
                       )}
                       <View style={{ flex: 1 }}>
@@ -794,7 +810,7 @@ export default function PantallaRutina() {
                             onChangeText={(t) =>
                               actualizarSerie(item.id, serie.id, "kg", t)
                             }
-                            editable={!serie.completada}
+                            editable={true}
                           />
                           <TextInput
                             style={[
@@ -872,13 +888,6 @@ export default function PantallaRutina() {
               );
             }}
           />
-
-          <TouchableOpacity
-            style={styles.botonAgregarEjercicioFlotante}
-            onPress={() => setModalVisible(true)}
-          >
-            <Text style={styles.textoBotonEjercicio}>+ Añadir Ejercicio</Text>
-          </TouchableOpacity>
 
           {(activo || segundos > 0) && rutinaActiva && (
             <View style={styles.barraTimerInferior}>
@@ -972,7 +981,6 @@ export default function PantallaRutina() {
                   style={[styles.botonMenuOpcion, { borderBottomWidth: 0 }]}
                   onPress={() => eliminarEjercicio(opcionesEjercicioId!)}
                 >
-                  <Text style={styles.textoMenuIcono}>❌</Text>
                   <Text
                     style={[
                       styles.textoMenuOpcion,
@@ -1139,7 +1147,7 @@ export default function PantallaRutina() {
                     setNuevoMusculoEjercicio("Piernas");
                     setNuevoMediaUrl("");
                     setNuevaDescripcion("");
-                    setNuevosMusculosSecundarios("");
+                    setNuevosMusculosSecundarios([]);
                     setModalCrearEjercicioVisible(true);
                   }}
                 >
@@ -1162,17 +1170,10 @@ export default function PantallaRutina() {
                           }}
                           onPress={() => agregarEjercicio(item)}
                         >
-                          {miniaturaCatalogo ? (
+                          {miniaturaCatalogo && (
                             <Image
                               source={{ uri: miniaturaCatalogo }}
                               style={styles.imagenMiniCatalogo}
-                            />
-                          ) : (
-                            <View
-                              style={[
-                                styles.imagenMiniCatalogo,
-                                { backgroundColor: COLORES.fondoInput },
-                              ]}
                             />
                           )}
                           <View>
@@ -1194,15 +1195,28 @@ export default function PantallaRutina() {
                                 setNuevoMusculoEjercicio(item.musculo);
                                 setNuevoMediaUrl(item.imagenUrl || "");
                                 setNuevaDescripcion(item.descripcion || "");
-                                setNuevosMusculosSecundarios(
+
+                                // CARGAMOS LOS SECUNDARIOS (sacamos el primero que es el principal)
+                                const secundariosPrevios =
                                   item.musculosTrabajados
-                                    ?.slice(1)
-                                    .join(", ") || "",
+                                    ? item.musculosTrabajados.slice(1)
+                                    : [];
+                                setNuevosMusculosSecundarios(
+                                  secundariosPrevios,
                                 );
+
                                 setModalCrearEjercicioVisible(true);
                               }}
                             >
-                              <Text style={{ fontSize: 18 }}>✏️</Text>
+                              <Text
+                                style={{
+                                  color: COLORES.azulHevy,
+                                  fontWeight: "bold",
+                                  fontSize: 12,
+                                }}
+                              >
+                                EDITAR
+                              </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={styles.botonTachoDB}
@@ -1272,15 +1286,38 @@ export default function PantallaRutina() {
                     onChangeText={setNuevaDescripcion}
                   />
                   <Text style={styles.labelFormulario}>
-                    Músculos Secundarios (Opcional)
+                    Músculos Secundarios (Seleccioná varios)
                   </Text>
-                  <TextInput
-                    style={styles.inputFormulario}
-                    placeholder="Ej: Glúteos, Lumbares"
-                    placeholderTextColor="#888"
-                    value={nuevosMusculosSecundarios}
-                    onChangeText={setNuevosMusculosSecundarios}
-                  />
+                  <View style={styles.contenedorFiltrosCreacion}>
+                    {MUSCULOS_CREACION.map((m) => {
+                      // No mostramos el músculo que ya eligió como principal
+                      if (m === nuevoMusculoEjercicio) return null;
+
+                      const seleccionado =
+                        nuevosMusculosSecundarios.includes(m);
+
+                      return (
+                        <TouchableOpacity
+                          key={`secundario-${m}`}
+                          style={[
+                            styles.botonFiltroCreacion,
+                            seleccionado && styles.botonFiltroActivo, // Se pinta si está seleccionado
+                          ]}
+                          onPress={() => toggleMusculoSecundario(m)}
+                        >
+                          <Text
+                            style={
+                              seleccionado
+                                ? styles.textoFiltroActivo
+                                : styles.textoFiltro
+                            }
+                          >
+                            {m}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                   <Text
                     style={[
                       styles.labelFormulario,
@@ -1480,17 +1517,24 @@ const formatearTiempoGlobal = (s: number) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORES.fondoApp, paddingTop: 40 },
+  container: {
+    flex: 1,
+    backgroundColor: COLORES.fondoApp,
+    paddingTop: 40,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: COLORES.grisBorde,
   },
-  botonAtrasCabecera: { padding: 10, marginLeft: -10 },
+  botonAtrasCabecera: {
+    padding: 10,
+    marginLeft: -10,
+  },
   iconoAtras: {
     color: COLORES.textoBlanco,
     fontSize: 24,
@@ -1499,19 +1543,22 @@ const styles = StyleSheet.create({
   },
   tituloPrincipal: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "800", // Más agresivo
     color: COLORES.textoBlanco,
+    textTransform: "uppercase", // Letra mayúscula para look más pro
+    letterSpacing: 1, // Letras un poco separadas
   },
   botonTerminarCabecera: {
     backgroundColor: COLORES.azulHevy,
     paddingHorizontal: 15,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 4, // Bordes casi cuadrados
   },
   textoTerminarCabecera: {
     color: COLORES.textoBlanco,
     fontWeight: "bold",
     fontSize: 14,
+    textTransform: "uppercase",
   },
   filaEstadisticas: {
     flexDirection: "row",
@@ -1520,42 +1567,52 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORES.grisBorde,
     marginBottom: 10,
+    backgroundColor: "#121212", // Fondo apenitas distinto para separar
   },
-  cajaEstadistica: { alignItems: "flex-start" },
+  cajaEstadistica: {
+    alignItems: "flex-start",
+  },
   labelEstadistica: {
     color: COLORES.grisOscuro,
-    fontSize: 12,
-    marginBottom: 5,
+    fontSize: 11,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    marginBottom: 4,
+    letterSpacing: 0.5,
   },
   valorEstadistica: {
     color: COLORES.textoBlanco,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
   },
   valorEstadisticaAzul: {
     color: COLORES.azulHevy,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
   },
   botonEmpezarGrande: {
     backgroundColor: COLORES.verdeExito,
     margin: 20,
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 6, // Cuadrado moderno
     alignItems: "center",
   },
   textoBotonEmpezar: {
     color: COLORES.textoBlanco,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
-  tarjetaEjercicio: { marginBottom: 25 },
+  tarjetaEjercicio: {
+    marginBottom: 30, // Más aire entre ejercicios
+  },
   cabeceraTarjeta: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     paddingHorizontal: 20,
-    marginBottom: 15,
+    marginBottom: 10,
   },
   contenedorNombreImagen: {
     flexDirection: "row",
@@ -1564,152 +1621,119 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   imagenMini: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 45,
+    height: 45,
+    borderRadius: 6, // Imagen cuadrada en lugar de círculo
     marginRight: 12,
     backgroundColor: COLORES.fondoInput,
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
   },
-  textoTarjeta: { color: COLORES.azulHevy, fontSize: 18, fontWeight: "bold" },
-  textoSubInfo: { color: COLORES.grisOscuro, fontSize: 14, marginVertical: 3 },
-  botonEditarDescanso: { alignSelf: "flex-start", paddingVertical: 4 },
-  textoEditarDescanso: {
+  textoTarjeta: {
     color: COLORES.azulHevy,
-    fontSize: 14,
+    fontSize: 18,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+  },
+  textoSubInfo: {
+    color: COLORES.grisOscuro,
+    fontSize: 13,
+    marginVertical: 3,
+  },
+  botonEditarDescanso: {
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+  },
+  textoEditarDescanso: {
+    color: COLORES.grisClaro,
+    fontSize: 13,
     fontWeight: "bold",
   },
-  botonOpcionesMenu: { paddingHorizontal: 10, paddingVertical: 5 },
+  botonOpcionesMenu: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
   textoOpcionesMenu: {
     color: COLORES.grisOscuro,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
   },
-  cajaOpcionesMenu: {
-    backgroundColor: "#1c1c1e",
-    width: "100%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-  },
-  indicadorDrag: {
-    width: 40,
-    height: 5,
-    backgroundColor: COLORES.grisOscuro,
-    borderRadius: 3,
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  tituloOpciones: {
-    color: COLORES.textoBlanco,
-    fontSize: 16,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  botonMenuOpcion: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORES.fondoInput,
-  },
-  textoMenuIcono: { fontSize: 20, marginRight: 15 },
-  textoMenuOpcion: {
-    color: COLORES.textoBlanco,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  botonCancelarOpciones: {
-    backgroundColor: COLORES.fondoInput,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  textoCancelarOpciones: {
-    color: COLORES.textoBlanco,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  itemReordenar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORES.fondoApp,
-  },
-  circuloRojoRemover: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORES.rojoPeligro,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 15,
-  },
-  textoMenos: {
-    color: COLORES.textoBlanco,
-    fontWeight: "bold",
-    fontSize: 18,
-    marginTop: -2,
-  },
-  iconoDrag: { color: COLORES.grisClaro, fontSize: 28, paddingHorizontal: 10 },
   filaCabeceraSeries: {
     flexDirection: "row",
     paddingHorizontal: 20,
-    marginBottom: 10,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORES.grisBorde,
+    paddingBottom: 5,
   },
   textoCabeceraSerie: {
     color: COLORES.grisOscuro,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "bold",
     width: "15%",
     textAlign: "center",
+    textTransform: "uppercase",
   },
   textoCabeceraSerieAnterior: {
     color: COLORES.grisOscuro,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "bold",
     width: "35%",
     textAlign: "center",
+    textTransform: "uppercase",
   },
   textoCabeceraSerieCheck: {
     color: COLORES.grisOscuro,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "bold",
     width: "20%",
     textAlign: "center",
+    paddingRight: 20,
   },
   filaSerie: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 5,
+    paddingVertical: 8, // Un poco más de aire
     paddingHorizontal: 20,
     backgroundColor: COLORES.fondoApp,
   },
-  filaSerieCompletada: { backgroundColor: "#1e3a29" },
-  contenedorIndiceSerie: { width: "15%", alignItems: "center" },
-  numeroSerie: { color: COLORES.textoBlanco, fontSize: 16, fontWeight: "bold" },
+  filaSerieCompletada: {
+    backgroundColor: "rgba(46, 204, 113, 0.1)", // Verde muy muy sutil en lugar de sólido
+  },
+  contenedorIndiceSerie: {
+    width: "15%",
+    alignItems: "center",
+  },
+  numeroSerie: {
+    color: COLORES.grisClaro,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
   textoAnterior: {
     color: COLORES.grisOscuro,
-    fontSize: 14,
+    fontSize: 13,
     width: "35%",
     textAlign: "center",
   },
   inputSerie: {
-    backgroundColor: COLORES.fondoInputSeries,
+    backgroundColor: "transparent",
     color: COLORES.textoBlanco,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "bold",
     textAlign: "center",
-    borderRadius: 8,
+    textAlignVertical: "center", // Centra el texto verticalmente en Android
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
     width: "15%",
-    paddingVertical: 8,
+    height: 38, // Le damos un poquito más de aire (estaba en 35)
+    padding: 0,
     marginHorizontal: "2.5%",
   },
-  inputSerieCompletada: { backgroundColor: "transparent" },
+  inputSerieCompletada: {
+    borderColor: "transparent",
+    backgroundColor: "transparent",
+  },
   botonEliminarSwipe: {
     backgroundColor: COLORES.rojoPeligro,
     justifyContent: "center",
@@ -1720,121 +1744,228 @@ const styles = StyleSheet.create({
   textoEliminarSwipe: {
     color: COLORES.textoBlanco,
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 13,
+    textTransform: "uppercase",
   },
-  botonAccionSerie: { width: "20%", alignItems: "center" },
-  botonCheckPlaceHolder: { width: "20%", alignItems: "center" },
+  botonCheckPlaceHolder: {
+    width: "20%",
+    alignItems: "center",
+  },
   botonCheck: {
-    backgroundColor: COLORES.fondoInputSeries,
-    width: 35,
-    height: 35,
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: COLORES.grisOscuro, // Cuadrado vacío cuando no está checkeado
+    width: 30,
+    height: 30,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 8,
-    marginRight: 10,
+    borderRadius: 4, // Cuadrado con apenas curvatura
+    marginRight: 25,
   },
-  botonCheckActivo: { backgroundColor: COLORES.verdeExito },
-  textoCheck: { color: COLORES.textoBlanco, fontSize: 18, fontWeight: "bold" },
-  botonAgregarSerie: {
-    backgroundColor: COLORES.fondoInputSeries,
-    marginHorizontal: 20,
-    marginTop: 15,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
+  botonCheckActivo: {
+    backgroundColor: COLORES.verdeExito,
+    borderColor: COLORES.verdeExito,
   },
-  textoAgregarSerie: {
-    color: COLORES.textoBlanco,
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  botonAgregarEjercicioFlotante: {
-    backgroundColor: COLORES.azulHevy,
-    margin: 20,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  textoBotonEjercicio: {
+  textoCheck: {
     color: COLORES.textoBlanco,
     fontSize: 16,
     fontWeight: "bold",
+  },
+  botonAgregarSerie: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: COLORES.grisOscuro,
+    marginHorizontal: 20,
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 4,
+    alignItems: "center",
+  },
+  textoAgregarSerie: {
+    color: COLORES.grisClaro,
+    fontSize: 13,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+  },
+  botonAgregarEjercicioFlotante: {
+    backgroundColor: "rgba(30, 30, 30, 0.9)", // Oscuro transparente
+    borderWidth: 1,
+    borderColor: COLORES.azulHevy,
+    margin: 20,
+    padding: 15,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  textoBotonEjercicio: {
+    color: COLORES.azulHevy,
+    fontSize: 14,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   barraTimerInferior: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#1c1c1e",
+    backgroundColor: "#121212",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 15,
-    borderTopWidth: 1,
+    borderTopWidth: 2,
     borderTopColor: COLORES.azulHevy,
   },
   btnRestarSumar: {
-    backgroundColor: "#3a3a3c",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 4,
   },
   textoBtnTimer: {
     color: COLORES.textoBlanco,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
   },
   textoTimerGigante: {
     color: COLORES.textoBlanco,
-    fontSize: 32,
-    fontWeight: "bold",
+    fontSize: 36,
+    fontWeight: "900",
     fontFamily: "monospace",
   },
   btnOmitir: {
-    backgroundColor: COLORES.azulHevy,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.rojoPeligro,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 4,
   },
   textoBtnOmitir: {
-    color: COLORES.textoBlanco,
-    fontSize: 16,
+    color: COLORES.rojoPeligro,
+    fontSize: 14,
     fontWeight: "bold",
+    textTransform: "uppercase",
+  },
+
+  // --- MODALES (Menos redondeados y más limpios) ---
+  modalOscuro: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.85)", // Fondo un poco más oscuro
+  },
+  cajaOpcionesMenu: {
+    backgroundColor: "#1c1c1e",
+    width: "100%",
+    borderTopLeftRadius: 12, // Curva menos pronunciada
+    borderTopRightRadius: 12,
+    padding: 20,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: COLORES.grisBorde,
+  },
+  indicadorDrag: {
+    width: 40,
+    height: 4,
+    backgroundColor: COLORES.grisOscuro,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  tituloOpciones: {
+    color: COLORES.textoBlanco,
+    fontSize: 14,
+    fontWeight: "bold",
+    textAlign: "center",
+    textTransform: "uppercase",
+    marginBottom: 20,
+    letterSpacing: 1,
+  },
+  botonMenuOpcion: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORES.grisBorde,
+  },
+  textoMenuIcono: { fontSize: 18, marginRight: 15 },
+  textoMenuOpcion: {
+    color: COLORES.textoBlanco,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  botonCancelarOpciones: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisOscuro,
+    padding: 12,
+    borderRadius: 6,
+    alignItems: "center",
+    marginTop: 20,
+  },
+  textoCancelarOpciones: {
+    color: COLORES.grisClaro,
+    fontSize: 14,
+    fontWeight: "bold",
+    textTransform: "uppercase",
   },
   modalContainer: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: COLORES.modalSemiOscuro,
+    backgroundColor: "rgba(0,0,0,0.85)",
   },
   modalContenido: {
-    backgroundColor: COLORES.fondoTarjeta,
-    height: "80%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: "#121212",
+    height: "85%",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORES.grisBorde,
   },
   modalCabecera: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORES.grisBorde,
+    paddingBottom: 15,
   },
-  modalTitulo: { color: COLORES.textoBlanco, fontSize: 22, fontWeight: "bold" },
-  textoCerrar: { color: COLORES.azulHevy, fontSize: 16, fontWeight: "bold" },
+  modalTitulo: {
+    color: COLORES.textoBlanco,
+    fontSize: 18,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  textoCerrar: {
+    color: COLORES.azulHevy,
+    fontSize: 14,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+  },
   contenedorFiltros: { marginBottom: 20 },
   botonFiltro: {
-    backgroundColor: COLORES.fondoInput,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 4,
     marginRight: 8,
   },
-  botonFiltroActivo: { backgroundColor: COLORES.azulHevy },
-  textoFiltro: { color: COLORES.grisClaro },
-  textoFiltroActivo: { color: COLORES.textoBlanco },
+  botonFiltroActivo: {
+    backgroundColor: COLORES.azulHevy,
+    borderColor: COLORES.azulHevy,
+  },
+  textoFiltro: { color: COLORES.grisClaro, fontWeight: "600" },
+  textoFiltroActivo: { color: COLORES.textoBlanco, fontWeight: "bold" },
   itemEjercicioDB: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORES.grisBorde,
     flexDirection: "row",
@@ -1842,34 +1973,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   imagenMiniCatalogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 45,
+    height: 45,
+    borderRadius: 6,
     marginRight: 15,
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
   },
-  textoEjercicioDB: { color: COLORES.textoBlanco, fontSize: 18 },
-  textoMusculoDB: { color: COLORES.grisOscuro, fontSize: 14 },
+  textoEjercicioDB: {
+    color: COLORES.textoBlanco,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  textoMusculoDB: {
+    color: COLORES.grisOscuro,
+    fontSize: 12,
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
   botonTachoDB: { padding: 10 },
-  modalOscuro: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: COLORES.modalOscuro,
-  },
   cajaDescanso: {
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "#1c1c1e",
     width: "100%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     padding: 20,
     alignItems: "center",
     paddingBottom: 40,
   },
   tituloCajaDescanso: {
     color: COLORES.textoBlanco,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
+    textTransform: "uppercase",
     marginBottom: 20,
     textAlign: "center",
+    letterSpacing: 1,
   },
   selectorPropio: {
     flexDirection: "row",
@@ -1881,33 +2020,37 @@ const styles = StyleSheet.create({
   labelSelector: {
     color: COLORES.grisOscuro,
     marginBottom: 10,
-    fontSize: 16,
+    fontSize: 12,
+    fontWeight: "bold",
     textAlign: "center",
+    textTransform: "uppercase",
   },
   controlesSelector: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORES.fondoInput,
-    borderRadius: 10,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+    borderRadius: 6,
     padding: 5,
   },
   botonSelector: {
     backgroundColor: COLORES.azulHevy,
-    width: 40,
-    height: 40,
+    width: 35,
+    height: 35,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 4,
   },
   textoBtnSelector: {
     color: COLORES.textoBlanco,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
     marginTop: -2,
   },
   numeroSelector: {
     color: COLORES.textoBlanco,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "bold",
     width: 50,
     textAlign: "center",
@@ -1915,66 +2058,74 @@ const styles = StyleSheet.create({
   botonOkDescanso: {
     backgroundColor: COLORES.verdeExito,
     width: "100%",
-    paddingVertical: 15,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 6,
     alignItems: "center",
     marginTop: 10,
   },
   textoOkDescanso: {
     color: COLORES.textoBlanco,
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "bold",
+    textTransform: "uppercase",
   },
   cajaCrearEjercicioScroll: {
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "#121212",
     width: "100%",
     maxHeight: "85%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORES.grisBorde,
   },
   labelFormulario: {
     color: COLORES.grisClaro,
-    fontSize: 14,
+    fontSize: 12,
     marginBottom: 5,
     fontWeight: "bold",
+    textTransform: "uppercase",
   },
   botonSubirFoto: {
-    backgroundColor: COLORES.fondoInput,
+    backgroundColor: "transparent",
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 6,
     flex: 1,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: COLORES.grisBorde,
+    borderStyle: "dashed",
+    borderColor: COLORES.grisOscuro,
   },
   textoSubirFoto: {
-    color: COLORES.textoBlanco,
+    color: COLORES.grisClaro,
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 13,
+    textTransform: "uppercase",
   },
   inputFormulario: {
-    backgroundColor: COLORES.fondoInput,
+    backgroundColor: "transparent",
     color: COLORES.textoBlanco,
-    padding: 15,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
     fontSize: 16,
     marginBottom: 15,
   },
   botonLlamarCrear: {
-    backgroundColor: COLORES.fondoInput,
+    backgroundColor: "transparent",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 6,
     alignItems: "center",
     marginBottom: 15,
     borderWidth: 1,
     borderColor: COLORES.azulHevy,
-    borderStyle: "dashed",
   },
   textoLlamarCrear: {
     color: COLORES.azulHevy,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "bold",
+    textTransform: "uppercase",
   },
   contenedorFiltrosCreacion: {
     flexDirection: "row",
@@ -1983,10 +2134,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   botonFiltroCreacion: {
-    backgroundColor: COLORES.fondoInput,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 20,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 4,
   },
   filaBotonesCrear: {
     flexDirection: "row",
@@ -1994,54 +2147,69 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   botonCancelarCrear: {
-    backgroundColor: COLORES.grisBorde,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisOscuro,
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 6,
     alignItems: "center",
     marginRight: 10,
   },
   textoCancelarCrear: {
     color: COLORES.grisClaro,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
+    textTransform: "uppercase",
   },
   botonGuardarCrear: {
     backgroundColor: COLORES.verdeExito,
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 6,
     alignItems: "center",
   },
   cajaDetalle: {
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "#1c1c1e",
     width: "90%",
-    borderRadius: 20,
+    borderRadius: 8,
     padding: 20,
     maxHeight: "80%",
     alignSelf: "center",
     marginTop: "auto",
     marginBottom: "auto",
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
   },
   tituloModalDetalle: {
     color: COLORES.textoBlanco,
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "900",
     textAlign: "center",
+    textTransform: "uppercase",
     marginBottom: 15,
+    letterSpacing: 1,
   },
-  gifEstilo: { width: "100%", height: 200, borderRadius: 15, marginBottom: 15 },
+  gifEstilo: {
+    width: "100%",
+    height: 200,
+    borderRadius: 6,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+  },
   subtituloDetalle: {
-    color: COLORES.grisClaro,
-    fontSize: 14,
+    color: COLORES.grisOscuro,
+    fontSize: 12,
     fontWeight: "bold",
+    textTransform: "uppercase",
     marginTop: 5,
     marginBottom: 5,
   },
   textoDescripcion: {
     color: COLORES.textoBlanco,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   filaMusculos: {
     flexDirection: "row",
@@ -2051,18 +2219,57 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   tagMusculo: {
-    backgroundColor: COLORES.azulHevy,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.azulHevy,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 15,
+    borderRadius: 4,
   },
-  textoTag: { color: COLORES.textoBlanco, fontSize: 12, fontWeight: "bold" },
+  textoTag: {
+    color: COLORES.azulHevy,
+    fontSize: 11,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+  },
   botonCerrarDetalle: {
-    backgroundColor: COLORES.fondoInput,
-    padding: 15,
-    borderRadius: 12,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisOscuro,
+    padding: 12,
+    borderRadius: 6,
     marginTop: 15,
     alignItems: "center",
   },
-  textoCerrarDetalle: { color: COLORES.textoBlanco, fontWeight: "bold" },
+  textoCerrarDetalle: {
+    color: COLORES.grisClaro,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+  },
+  itemReordenar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORES.grisBorde,
+  },
+  circuloRojoRemover: {
+    width: 24,
+    height: 24,
+    borderRadius: 4, // Cuadrado
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.rojoPeligro,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  textoMenos: {
+    color: COLORES.rojoPeligro,
+    fontWeight: "bold",
+    fontSize: 18,
+    marginTop: -2,
+  },
+  iconoDrag: { color: COLORES.grisOscuro, fontSize: 24, paddingHorizontal: 10 },
 });

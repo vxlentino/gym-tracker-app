@@ -9,11 +9,17 @@ export const GRUPOS_MUSCULARES = [
   "Brazos",
 ];
 export const MUSCULOS_CREACION = [
-  "Piernas",
   "Pecho",
   "Espalda",
   "Hombros",
-  "Brazos",
+  "Bíceps",
+  "Tríceps",
+  "Cuádriceps",
+  "Isquitibiales",
+  "Glúteos",
+  "Pantorrillas",
+  "Abdomen",
+  "Antebrazos",
 ];
 
 export const EJERCICIOS_DB = [

@@ -30,7 +30,14 @@ export default function HomeScreen() {
   const [opcionesCarpetaId, setOpcionesCarpetaId] = useState<string | null>(
     null,
   );
+
   const [opcionesRutinaSeleccionada, setOpcionesRutinaSeleccionada] = useState<{
+    idCarpeta: string;
+    nombreRutina: string;
+  } | null>(null);
+
+  // NUEVO ESTADO: Puente para saber exactamente qué estamos editando sin romper los carteles
+  const [rutinaAEditar, setRutinaAEditar] = useState<{
     idCarpeta: string;
     nombreRutina: string;
   } | null>(null);
@@ -40,11 +47,12 @@ export default function HomeScreen() {
   const [nuevoNombreEdicionCarpeta, setNuevoNombreEdicionCarpeta] =
     useState("");
 
+  const [carpetaAEditarId, setCarpetaAEditarId] = useState<string | null>(null);
+
   const [modalEditarRutinaVisible, setModalEditarRutinaVisible] =
     useState(false);
   const [nuevoNombreEdicionRutina, setNuevoNombreEdicionRutina] = useState("");
 
-  // --- NUEVOS ESTADOS PARA EL NOMBRE DE USUARIO ---
   const [modalNombreVisible, setModalNombreVisible] = useState(false);
   const [inputNombre, setInputNombre] = useState("");
 
@@ -56,13 +64,11 @@ export default function HomeScreen() {
 
   const cargarDatos = async () => {
     try {
-      // 1. Verificamos si ya guardó su nombre antes
       const nombreGuardado = await AsyncStorage.getItem("@nombre_usuario");
       if (!nombreGuardado) {
-        setModalNombreVisible(true); // Si no hay nombre, mostramos el modal
+        setModalNombreVisible(true);
       }
 
-      // 2. Cargamos las rutinas normalmente
       const datosV2 = await AsyncStorage.getItem("@gym_carpetas_v2");
       if (datosV2 !== null) {
         setCarpetas(JSON.parse(datosV2));
@@ -88,7 +94,6 @@ export default function HomeScreen() {
     }
   };
 
-  // --- NUEVA FUNCIÓN PARA GUARDAR EL NOMBRE ---
   const guardarNombre = async () => {
     if (inputNombre.trim() !== "") {
       await AsyncStorage.setItem("@nombre_usuario", inputNombre.trim());
@@ -109,7 +114,6 @@ export default function HomeScreen() {
     }
   };
 
-  // --- FUNCIONES DE CARPETAS ---
   const crearCarpeta = () => {
     if (nombreNuevaCarpeta.trim() === "") return;
     const nuevaCarpeta = {
@@ -126,17 +130,20 @@ export default function HomeScreen() {
   };
 
   const editarCarpeta = () => {
-    if (nuevoNombreEdicionCarpeta.trim() === "" || !opcionesCarpetaId) return;
+    // Si está vacío o no hay ID en el puente, no hace nada
+    if (nuevoNombreEdicionCarpeta.trim() === "" || !carpetaAEditarId) return;
+
     const nuevasCarpetas = carpetas.map((c) => {
-      if (c.id === opcionesCarpetaId) {
+      if (c.id === carpetaAEditarId) {
         return { ...c, nombre: nuevoNombreEdicionCarpeta };
       }
       return c;
     });
+
     setCarpetas(nuevasCarpetas);
     guardarCarpetas(nuevasCarpetas);
     setModalEditarCarpetaVisible(false);
-    setOpcionesCarpetaId(null);
+    setCarpetaAEditarId(null); // Limpiamos el puente al terminar
   };
 
   const eliminarCarpeta = (idCarpeta: string) => {
@@ -172,17 +179,33 @@ export default function HomeScreen() {
     guardarCarpetas(nuevasCarpetas);
   };
 
-  // --- FUNCIONES DE RUTINAS ---
   const abrirModalCrearRutina = (idCarpeta: string) => {
     setCarpetaDestinoId(idCarpeta);
     setModalRutinaVisible(true);
   };
 
   const crearRutina = () => {
-    if (nombreNuevaRutina.trim() === "" || !carpetaDestinoId) return;
+    const nombreLimpio = nombreNuevaRutina.trim();
+    if (nombreLimpio === "" || !carpetaDestinoId) return;
+
+    // VALIDACIÓN: Frenamos si ya existe el nombre en cualquier otra carpeta
+    const existeDuplicado = carpetas.some((c) =>
+      c.rutinas.some(
+        (r: string) => r.toLowerCase() === nombreLimpio.toLowerCase(),
+      ),
+    );
+
+    if (existeDuplicado) {
+      Alert.alert(
+        "Nombre Repetido",
+        `Ya tenés una rutina llamada "${nombreLimpio}". Por favor, agregale algo para diferenciarla (ej. "Upper 2").`,
+      );
+      return;
+    }
+
     const nuevasCarpetas = carpetas.map((c) => {
       if (c.id === carpetaDestinoId) {
-        return { ...c, rutinas: [...c.rutinas, nombreNuevaRutina] };
+        return { ...c, rutinas: [...c.rutinas, nombreLimpio] };
       }
       return c;
     });
@@ -193,11 +216,26 @@ export default function HomeScreen() {
   };
 
   const editarRutina = async () => {
-    if (nuevoNombreEdicionRutina.trim() === "" || !opcionesRutinaSeleccionada)
-      return;
+    if (nuevoNombreEdicionRutina.trim() === "" || !rutinaAEditar) return;
 
-    const { idCarpeta, nombreRutina } = opcionesRutinaSeleccionada;
+    const { idCarpeta, nombreRutina } = rutinaAEditar;
     const nuevoNombre = nuevoNombreEdicionRutina.trim();
+
+    // VALIDACIÓN: Frenamos si está tratando de renombrarla con un nombre que ya usa otra
+    if (nuevoNombre.toLowerCase() !== nombreRutina.toLowerCase()) {
+      const existeDuplicado = carpetas.some((c) =>
+        c.rutinas.some(
+          (r: string) => r.toLowerCase() === nuevoNombre.toLowerCase(),
+        ),
+      );
+      if (existeDuplicado) {
+        Alert.alert(
+          "Nombre Repetido",
+          `Ya tenés otra rutina llamada "${nuevoNombre}". Elegí un nombre distinto.`,
+        );
+        return;
+      }
+    }
 
     const nuevasCarpetas = carpetas.map((c) => {
       if (c.id === idCarpeta) {
@@ -223,7 +261,7 @@ export default function HomeScreen() {
     }
 
     setModalEditarRutinaVisible(false);
-    setOpcionesRutinaSeleccionada(null);
+    setRutinaAEditar(null); // Limpiamos el puente de edición
   };
 
   const eliminarRutina = (idCarpeta: string, nombreRutina: string) => {
@@ -378,7 +416,6 @@ export default function HomeScreen() {
           animationType="fade"
           transparent={true}
           visible={modalNombreVisible}
-          // El onRequestClose vacío fuerza a que el usuario TENGA que poner el nombre
           onRequestClose={() => {}}
         >
           <View style={styles.modalOscuro}>
@@ -498,11 +535,12 @@ export default function HomeScreen() {
                     (c) => c.id === opcionesCarpetaId,
                   );
                   setNuevoNombreEdicionCarpeta(carpeta?.nombre || "");
+                  // ¡ACÁ ESTÁ LA MAGIA! Guardamos el ID en el puente antes de cerrar el menú
+                  setCarpetaAEditarId(opcionesCarpetaId);
                   setOpcionesCarpetaId(null);
                   setModalEditarCarpetaVisible(true);
                 }}
               >
-                <Text style={styles.textoMenuIcono}>✏️</Text>
                 <Text style={styles.textoMenuOpcion}>Renombrar Carpeta</Text>
               </TouchableOpacity>
 
@@ -510,7 +548,6 @@ export default function HomeScreen() {
                 style={[styles.botonMenuOpcion, { borderBottomWidth: 0 }]}
                 onPress={() => eliminarCarpeta(opcionesCarpetaId!)}
               >
-                <Text style={styles.textoMenuIcono}>❌</Text>
                 <Text
                   style={[
                     styles.textoMenuOpcion,
@@ -551,7 +588,10 @@ export default function HomeScreen() {
               <View style={styles.filaBotones}>
                 <TouchableOpacity
                   style={styles.botonCancelar}
-                  onPress={() => setModalEditarCarpetaVisible(false)}
+                  onPress={() => {
+                    setModalEditarCarpetaVisible(false);
+                    setCarpetaAEditarId(null);
+                  }}
                 >
                   <Text style={styles.textoCancelar}>Cancelar</Text>
                 </TouchableOpacity>
@@ -584,11 +624,12 @@ export default function HomeScreen() {
                   setNuevoNombreEdicionRutina(
                     opcionesRutinaSeleccionada!.nombreRutina,
                   );
+                  // ACÁ ESTABA EL ERROR: Guardamos la rutina en el puente antes de matar el menú
+                  setRutinaAEditar(opcionesRutinaSeleccionada);
                   setOpcionesRutinaSeleccionada(null);
                   setModalEditarRutinaVisible(true);
                 }}
               >
-                <Text style={styles.textoMenuIcono}>✏️</Text>
                 <Text style={styles.textoMenuOpcion}>Renombrar Rutina</Text>
               </TouchableOpacity>
 
@@ -601,7 +642,6 @@ export default function HomeScreen() {
                   )
                 }
               >
-                <Text style={styles.textoMenuIcono}>❌</Text>
                 <Text
                   style={[
                     styles.textoMenuOpcion,
@@ -627,7 +667,10 @@ export default function HomeScreen() {
           animationType="fade"
           transparent={true}
           visible={modalEditarRutinaVisible}
-          onRequestClose={() => setModalEditarRutinaVisible(false)}
+          onRequestClose={() => {
+            setModalEditarRutinaVisible(false);
+            setRutinaAEditar(null);
+          }}
         >
           <View style={styles.modalOscuro}>
             <View style={styles.cajaModal}>
@@ -642,7 +685,10 @@ export default function HomeScreen() {
               <View style={styles.filaBotones}>
                 <TouchableOpacity
                   style={styles.botonCancelar}
-                  onPress={() => setModalEditarRutinaVisible(false)}
+                  onPress={() => {
+                    setModalEditarRutinaVisible(false);
+                    setRutinaAEditar(null); // Limpiamos si cancela
+                  }}
                 >
                   <Text style={styles.textoCancelar}>Cancelar</Text>
                 </TouchableOpacity>
@@ -673,36 +719,49 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 30,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORES.grisBorde,
+    paddingBottom: 15,
   },
   tituloPrincipal: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 20,
+    fontWeight: "900",
     color: COLORES.textoBlanco,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   botonNuevaCarpetaCabecera: {
-    backgroundColor: COLORES.azulHevy,
-    paddingHorizontal: 15,
+    backgroundColor: "transparent", // Botón "Ghost"
+    borderWidth: 1,
+    borderColor: COLORES.azulHevy,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 4,
   },
   textoNuevaCarpetaCabecera: {
-    color: COLORES.textoBlanco,
+    color: COLORES.azulHevy,
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 12,
+    textTransform: "uppercase",
   },
   textoVacio: {
     color: COLORES.grisOscuro,
     textAlign: "center",
     marginTop: 50,
-    fontSize: 16,
+    fontSize: 14,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-
-  bloqueCarpeta: { marginBottom: 20 },
+  bloqueCarpeta: {
+    marginBottom: 20,
+  },
   cabeceraCarpetaContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORES.fondoTarjeta,
-    borderRadius: 10,
+    backgroundColor: "#121212", // Fondo apenitas más claro que el fondo general
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+    borderRadius: 6,
   },
   cabeceraCarpetaTexto: {
     flex: 1,
@@ -711,71 +770,91 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
   },
-  botonOpcionesCarpeta: { padding: 18, paddingLeft: 5 },
+  botonOpcionesCarpeta: {
+    padding: 18,
+    paddingLeft: 5,
+  },
   textoCarpeta: {
     color: COLORES.textoBlanco,
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
-  iconoExpandir: { color: COLORES.grisOscuro, fontSize: 16 },
+  iconoExpandir: {
+    color: COLORES.grisOscuro,
+    fontSize: 14,
+  },
   iconoOpcionesVertical: {
     color: COLORES.grisClaro,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
   },
-
   contenedorRutinas: {
     marginTop: 10,
     paddingLeft: 15,
-    borderLeftWidth: 2,
+    borderLeftWidth: 1, // Línea guía más fina
     borderLeftColor: COLORES.azulHevy,
     marginLeft: 10,
   },
-
   itemRutinaContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORES.fondoInput,
-    borderRadius: 8,
-    marginBottom: 10,
+    backgroundColor: "transparent", // Le sacamos el fondo de bloque
+    borderBottomWidth: 1, // Separador fino
+    borderBottomColor: COLORES.grisBorde,
+    marginBottom: 5,
   },
   itemRutinaBotonCentral: {
     flex: 1,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 10,
   },
-  botonOpcionesRutina: { padding: 15, paddingLeft: 5 },
-  textoRutina: { color: COLORES.textoBlanco, fontSize: 16, fontWeight: "600" },
-  iconoEntrar: { color: COLORES.azulHevy, fontSize: 20, fontWeight: "bold" },
+  botonOpcionesRutina: {
+    padding: 15,
+    paddingLeft: 5,
+  },
+  textoRutina: {
+    color: COLORES.textoBlanco,
+    fontSize: 14,
+    fontWeight: "600",
+    textTransform: "uppercase",
+  },
+  iconoEntrar: {
+    color: COLORES.grisOscuro, // Flecha más sutil
+    fontSize: 18,
+    fontWeight: "bold",
+  },
   iconoOpcionesVerticalRutina: {
     color: COLORES.grisClaro,
     fontSize: 18,
     fontWeight: "bold",
   },
-
   botonNuevaRutina: {
-    padding: 15,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 4,
     borderStyle: "dashed",
     borderWidth: 1,
     borderColor: COLORES.grisOscuro,
     alignItems: "center",
-    marginTop: 5,
+    marginTop: 10,
   },
   textoNuevaRutina: {
     color: COLORES.grisOscuro,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-
   botonEliminarSwipeCarpeta: {
     backgroundColor: COLORES.rojoPeligro,
     justifyContent: "center",
     alignItems: "center",
     width: 80,
-    borderRadius: 10,
+    borderRadius: 6,
     marginLeft: 10,
   },
   botonEliminarSwipeRutina: {
@@ -783,137 +862,165 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     width: 80,
-    borderRadius: 8,
-    marginBottom: 10,
     marginLeft: 10,
+    marginBottom: 5,
   },
   textoEliminarSwipe: {
     color: COLORES.textoBlanco,
     fontWeight: "bold",
-    fontSize: 14,
-    textAlign: "center",
+    fontSize: 13,
+    textTransform: "uppercase",
   },
 
+  // --- MODALES Y MENÚS INFERIORES ---
   modalOscuro: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.8)", // Más oscuro para el modal de bienvenida
+    backgroundColor: "rgba(0,0,0,0.85)",
   },
   cajaModal: {
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "#121212",
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
     width: "85%",
-    borderRadius: 15,
+    borderRadius: 8,
     padding: 25,
   },
   tituloModal: {
     color: COLORES.textoBlanco,
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontWeight: "900",
     marginBottom: 20,
+    textTransform: "uppercase",
+    textAlign: "center",
+    letterSpacing: 1,
   },
   tituloModalBienvenida: {
     color: COLORES.textoBlanco,
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: 20,
+    fontWeight: "900",
     marginBottom: 10,
     textAlign: "center",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   textoSubtituloBienvenida: {
     color: COLORES.grisClaro,
-    fontSize: 14,
+    fontSize: 13,
     marginBottom: 20,
     textAlign: "center",
   },
   inputModal: {
-    backgroundColor: COLORES.fondoInput,
+    backgroundColor: "transparent",
     color: COLORES.textoBlanco,
-    padding: 15,
-    borderRadius: 10,
-    fontSize: 16,
+    padding: 12,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+    fontSize: 15,
     marginBottom: 20,
   },
-  filaBotones: { flexDirection: "row", justifyContent: "space-between" },
+  filaBotones: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
   botonCancelar: {
-    backgroundColor: COLORES.grisBorde,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisOscuro,
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 4,
     alignItems: "center",
     marginRight: 10,
   },
-  textoCancelar: { color: COLORES.grisClaro, fontSize: 16, fontWeight: "bold" },
+  textoCancelar: {
+    color: COLORES.grisClaro,
+    fontSize: 13,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+  },
   botonGuardar: {
     backgroundColor: COLORES.verdeExito,
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 4,
     alignItems: "center",
   },
   botonGuardarBienvenida: {
     backgroundColor: COLORES.azulHevy,
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: 4,
     alignItems: "center",
   },
   textoGuardar: {
     color: COLORES.textoBlanco,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "bold",
+    textTransform: "uppercase",
   },
-
-  // ESTILOS MODAL OPCIONES INFERIOR
   modalOscuroMenu: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: COLORES.modalOscuro,
+    backgroundColor: "rgba(0,0,0,0.85)",
   },
   cajaOpcionesMenu: {
     backgroundColor: "#1c1c1e",
     width: "100%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     padding: 20,
     paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: COLORES.grisBorde,
   },
   indicadorDrag: {
     width: 40,
-    height: 5,
+    height: 4,
     backgroundColor: COLORES.grisOscuro,
-    borderRadius: 3,
+    borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
   },
   tituloOpciones: {
     color: COLORES.textoBlanco,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
     textAlign: "center",
+    textTransform: "uppercase",
     marginBottom: 20,
+    letterSpacing: 1,
   },
   botonMenuOpcion: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: COLORES.fondoInput,
+    borderBottomColor: COLORES.grisBorde,
   },
-  textoMenuIcono: { fontSize: 20, marginRight: 15 },
+  textoMenuIcono: {
+    fontSize: 18,
+    marginRight: 15,
+  },
   textoMenuOpcion: {
     color: COLORES.textoBlanco,
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: "600",
   },
   botonCancelarOpciones: {
-    backgroundColor: COLORES.fondoInput,
-    padding: 15,
-    borderRadius: 10,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisOscuro,
+    padding: 12,
+    borderRadius: 4,
     alignItems: "center",
     marginTop: 20,
   },
   textoCancelarOpciones: {
-    color: COLORES.textoBlanco,
-    fontSize: 16,
+    color: COLORES.grisClaro,
+    fontSize: 13,
     fontWeight: "bold",
+    textTransform: "uppercase",
   },
 });
