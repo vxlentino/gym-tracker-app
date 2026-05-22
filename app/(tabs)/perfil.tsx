@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LineChart } from "react-native-gifted-charts";
 import { COLORES } from "../../colores";
 
 export default function PantallaPerfil() {
@@ -19,6 +20,9 @@ export default function PantallaPerfil() {
 
   // ESTADO PARA EL NOMBRE DE USUARIO
   const [nombreUsuario, setNombreUsuario] = useState("Atleta");
+
+  // NUEVO ESTADO PARA EL FILTRO DEL GRÁFICO
+  const [filtroGrafico, setFiltroGrafico] = useState("Volumen");
 
   const router = useRouter();
 
@@ -71,8 +75,41 @@ export default function PantallaPerfil() {
     return `${minutos}m`;
   };
 
+  // MOCK DATA: Últimos 5 entrenamientos
+  const datosVolumen = [
+    { value: 4500, label: "Lun" },
+    { value: 5200, label: "Mié" },
+    { value: 4800, label: "Vie" },
+    { value: 6100, label: "Sáb" },
+    { value: 5900, label: "Dom" },
+  ];
+  const datosDuracion = [
+    { value: 45, label: "Lun" },
+    { value: 60, label: "Mié" },
+    { value: 55, label: "Vie" },
+    { value: 70, label: "Sáb" },
+    { value: 65, label: "Dom" },
+  ];
+  const datosRepeticiones = [
+    { value: 120, label: "Lun" },
+    { value: 140, label: "Mié" },
+    { value: 130, label: "Vie" },
+    { value: 160, label: "Sáb" },
+    { value: 150, label: "Dom" },
+  ];
+
+  const datosGrafico =
+    filtroGrafico === "Volumen"
+      ? datosVolumen
+      : filtroGrafico === "Duración"
+        ? datosDuracion
+        : datosRepeticiones;
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 120 }}
+    >
       {/* CABECERA ESTILO TÉCNICO */}
       <View style={styles.cabeceraPerfil}>
         <View style={styles.avatarContainer}>
@@ -94,10 +131,57 @@ export default function PantallaPerfil() {
       {/* SECCIÓN RESUMEN */}
       <Text style={styles.tituloSeccion}>Resumen Histórico</Text>
 
-      <View style={styles.contenedorGraficoFalso}>
-        <Text style={styles.textoProximamente}>
-          Acá irán tus gráficos más adelante
-        </Text>
+      <View style={styles.contenedorGrafico}>
+        <LineChart
+          data={datosGrafico}
+          curved
+          areaChart
+          color={COLORES.azulHevy}
+          thickness={3}
+          startFillColor={COLORES.azulHevy}
+          startOpacity={0.4}
+          endFillColor="transparent"
+          endOpacity={0}
+          dataPointsColor={COLORES.azulHevy}
+          dataPointsRadius={4}
+          yAxisThickness={0}
+          xAxisThickness={1}
+          xAxisColor={COLORES.grisBorde}
+          rulesColor="rgba(255,255,255,0.05)" // Líneas extremadamente sutiles
+          rulesType="solid"
+          hideRules={false}
+          yAxisTextStyle={{ color: COLORES.grisOscuro, fontSize: 11 }}
+          xAxisLabelTextStyle={{
+            color: COLORES.grisOscuro,
+            fontSize: 11,
+            textAlign: "center",
+          }}
+          noOfSections={4}
+          backgroundColor="transparent"
+          initialSpacing={15}
+        />
+      </View>
+
+      <View style={styles.filaFiltrosGrafico}>
+        {["Duración", "Volumen", "Repeticiones"].map((filtro) => (
+          <TouchableOpacity
+            key={filtro}
+            style={[
+              styles.pillFiltro,
+              filtroGrafico === filtro && styles.pillFiltroActivo,
+            ]}
+            onPress={() => setFiltroGrafico(filtro)}
+          >
+            <Text
+              style={[
+                styles.textoPillFiltro,
+                filtroGrafico === filtro && styles.textoPillFiltroActivo,
+              ]}
+            >
+              {filtro}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <View style={styles.filaResumenStats}>
@@ -122,25 +206,25 @@ export default function PantallaPerfil() {
           style={styles.botonInfo}
           onPress={() => router.push("/estadisticas")}
         >
-          <Text style={styles.textoBotonInfo}>Estadísticas</Text>
+          <Text style={styles.textoBotonInfo}>ESTADÍSTICAS</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/catalogo")}
         >
-          <Text style={styles.textoBotonInfo}>Ejercicios</Text>
+          <Text style={styles.textoBotonInfo}>EJERCICIOS</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/medidas")}
         >
-          <Text style={styles.textoBotonInfo}>Medidas</Text>
+          <Text style={styles.textoBotonInfo}>MEDIDAS</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/calendario")}
         >
-          <Text style={styles.textoBotonInfo}>Calendario</Text>
+          <Text style={styles.textoBotonInfo}>CALENDARIO</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -159,23 +243,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 30,
-    borderBottomWidth: 1, // Le agregamos una línea divisoria
-    borderBottomColor: COLORES.grisBorde,
-    paddingBottom: 20,
+    borderBottomWidth: 0, // Quitamos bordes duros
+    paddingBottom: 10,
   },
   avatarContainer: {
     width: 80,
     height: 80,
-    borderRadius: 6, // Ya no es un círculo perfecto, es un cuadrado sutil
-    backgroundColor: "transparent", // Fondo hueco
-    borderWidth: 1,
-    borderColor: COLORES.azulHevy, // Borde neón
+    borderRadius: 40, // Círculo perfecto estilo Hevy
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: COLORES.azulHevy,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 20,
   },
   avatarTexto: {
-    color: COLORES.azulHevy, // Letra del mismo color que el borde
+    color: COLORES.azulHevy,
     fontSize: 40,
     fontWeight: "bold",
   },
@@ -195,98 +278,107 @@ const styles = StyleSheet.create({
   cajaTop: { alignItems: "flex-start" },
   labelTop: {
     color: COLORES.grisOscuro,
-    fontSize: 12,
+    fontSize: 11,
     marginBottom: 4,
     textTransform: "uppercase",
-    fontWeight: "bold",
-    letterSpacing: 0.5,
+    fontWeight: "900",
+    letterSpacing: 1.5,
   },
   valorTop: { color: COLORES.textoBlanco, fontSize: 20, fontWeight: "bold" },
 
   tituloSeccion: {
     color: COLORES.textoBlanco,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "900",
-    marginTop: 10,
-    marginBottom: 15,
-    textTransform: "uppercase", // Títulos en mayúsculas
-    letterSpacing: 1,
+    marginTop: 20,
+    marginBottom: 20,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
   },
 
-  contenedorGraficoFalso: {
-    height: 150,
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: COLORES.grisBorde,
-    borderStyle: "dashed", // Línea punteada técnica
-    borderRadius: 6,
-    justifyContent: "center",
+  contenedorGrafico: {
+    paddingVertical: 20,
+    marginBottom: 10,
     alignItems: "center",
-    marginBottom: 15,
   },
-  textoProximamente: {
+  filaFiltrosGrafico: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 25,
+  },
+  pillFiltro: {
+    flex: 1,
+    backgroundColor: "transparent",
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginHorizontal: 4,
+    alignItems: "center",
+  },
+  pillFiltroActivo: {
+    backgroundColor: COLORES.azulHevy,
+  },
+  textoPillFiltro: {
     color: COLORES.grisOscuro,
     fontSize: 12,
-    fontWeight: "bold",
+    fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
+  },
+  textoPillFiltroActivo: {
+    color: COLORES.textoBlanco,
   },
 
   filaResumenStats: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 30,
+    marginBottom: 40,
+    gap: 15,
   },
   cajaResumen: {
     flex: 1,
-    backgroundColor: "transparent", // Cajas transparentes con bordes
-    borderWidth: 1,
-    borderColor: COLORES.grisBorde,
-    padding: 15,
-    borderRadius: 6,
-    marginHorizontal: 5,
+    backgroundColor: "#1c1c1e", // Fondo limpio y oscuro
+    padding: 20,
+    borderRadius: 16, // Bordes más suaves
     alignItems: "center",
   },
   valorResumenAzul: {
     color: COLORES.azulHevy,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
     marginBottom: 5,
   },
   valorResumen: {
     color: COLORES.textoBlanco,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
     marginBottom: 5,
   },
   labelResumen: {
     color: COLORES.grisOscuro,
-    fontSize: 11,
-    fontWeight: "bold",
+    fontSize: 10,
+    fontWeight: "900",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1.5,
   },
 
   grillaBotones: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    gap: 15,
   },
   botonInfo: {
-    width: "48%",
-    backgroundColor: "transparent", // Botones Ghost
-    borderWidth: 1,
-    borderColor: COLORES.grisBorde,
+    flexBasis: "47%",
+    backgroundColor: "#1c1c1e",
     padding: 20,
-    borderRadius: 6,
-    marginBottom: 15,
+    borderRadius: 16,
     alignItems: "center",
   },
   textoBotonInfo: {
     color: COLORES.textoBlanco,
-    fontSize: 14,
-    fontWeight: "bold",
+    fontSize: 12,
+    fontWeight: "900",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1.5,
   },
 });
