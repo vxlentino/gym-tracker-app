@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import DraggableFlatList, {
   ScaleDecorator,
 } from "react-native-draggable-flatlist";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   Alert,
@@ -43,6 +44,9 @@ Notifications.setNotificationHandler({
 const PESTAÑAS_FILTRO = ["Todos", "Mis Ejercicios", ...MUSCULOS_CREACION];
 
 export default function PantallaRutina() {
+  // Esto lee cuántos píxeles mide la barra de abajo del celular que la esté usando
+  const insets = useSafeAreaInsets();
+
   const { rutina } = useLocalSearchParams();
   const router = useRouter();
 
@@ -890,7 +894,12 @@ export default function PantallaRutina() {
           />
 
           {(activo || segundos > 0) && rutinaActiva && (
-            <View style={styles.barraTimerInferior}>
+            <View
+              style={[
+                styles.barraTimerInferior,
+                { paddingBottom: insets.bottom > 0 ? insets.bottom + 10 : 15 },
+              ]}
+            >
               <TouchableOpacity
                 style={styles.btnRestarSumar}
                 onPress={() =>
@@ -1008,7 +1017,15 @@ export default function PantallaRutina() {
           >
             <GestureHandlerRootView style={{ flex: 1 }}>
               <View style={styles.modalContainer}>
-                <View style={styles.modalContenido}>
+                <View
+                  style={[
+                    styles.modalContenido,
+                    {
+                      paddingBottom:
+                        insets.bottom > 0 ? insets.bottom + 20 : 20,
+                    },
+                  ]}
+                >
                   <View style={styles.modalCabecera}>
                     <Text style={styles.modalTitulo}>Reordenar</Text>
                     <TouchableOpacity
@@ -1025,6 +1042,7 @@ export default function PantallaRutina() {
                       guardarRutina(data);
                     }}
                     keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ paddingBottom: 80 }}
                     renderItem={({ item, drag, isActive }) => {
                       const dbEj = TODOS_LOS_EJERCICIOS.find(
                         (e) => e.nombre === item.nombre,
@@ -1222,7 +1240,15 @@ export default function PantallaRutina() {
                               style={styles.botonTachoDB}
                               onPress={() => eliminarEjercicioDeDB(item.id)}
                             >
-                              <Text style={{ fontSize: 18 }}>🗑️</Text>
+                              <Text
+                                style={{
+                                  color: COLORES.rojoPeligro,
+                                  fontWeight: "bold",
+                                  fontSize: 12,
+                                }}
+                              >
+                                ELIMINAR
+                              </Text>
                             </TouchableOpacity>
                           </View>
                         )}

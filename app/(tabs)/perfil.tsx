@@ -17,7 +17,7 @@ export default function PantallaPerfil() {
     tiempoTotalSegundos: 0,
   });
 
-  // NUEVO ESTADO PARA EL NOMBRE DE USUARIO
+  // ESTADO PARA EL NOMBRE DE USUARIO
   const [nombreUsuario, setNombreUsuario] = useState("Atleta");
 
   const router = useRouter();
@@ -29,7 +29,7 @@ export default function PantallaPerfil() {
     }, []),
   );
 
-  // NUEVA FUNCIÓN PARA LEER EL NOMBRE DE LA MEMORIA
+  // FUNCIÓN PARA LEER EL NOMBRE DE LA MEMORIA
   const cargarNombre = async () => {
     try {
       const nombreGuardado = await AsyncStorage.getItem("@nombre_usuario");
@@ -73,16 +73,14 @@ export default function PantallaPerfil() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* CABECERA ESTILO HEVY */}
+      {/* CABECERA ESTILO TÉCNICO */}
       <View style={styles.cabeceraPerfil}>
         <View style={styles.avatarContainer}>
-          {/* Agarramos la primera letra del nombre dinámicamente y la ponemos en mayúscula */}
           <Text style={styles.avatarTexto}>
             {nombreUsuario.charAt(0).toUpperCase()}
           </Text>
         </View>
         <View style={styles.infoUsuario}>
-          {/* Mostramos el nombre dinámico */}
           <Text style={styles.nombreUsuario}>{nombreUsuario}</Text>
           <View style={styles.filaEstadisticasTop}>
             <View style={styles.cajaTop}>
@@ -98,7 +96,7 @@ export default function PantallaPerfil() {
 
       <View style={styles.contenedorGraficoFalso}>
         <Text style={styles.textoProximamente}>
-          Acá irán tus gráficos más adelante 📊
+          Acá irán tus gráficos más adelante
         </Text>
       </View>
 
@@ -124,25 +122,25 @@ export default function PantallaPerfil() {
           style={styles.botonInfo}
           onPress={() => router.push("/estadisticas")}
         >
-          <Text style={styles.textoBotonInfo}>📈 Estadísticas</Text>
+          <Text style={styles.textoBotonInfo}>Estadísticas</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/catalogo")}
         >
-          <Text style={styles.textoBotonInfo}>🏋️‍♂️ Ejercicios</Text>
+          <Text style={styles.textoBotonInfo}>Ejercicios</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/medidas")}
         >
-          <Text style={styles.textoBotonInfo}>📏 Medidas</Text>
+          <Text style={styles.textoBotonInfo}>Medidas</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/calendario")}
         >
-          <Text style={styles.textoBotonInfo}>📅 Calendario</Text>
+          <Text style={styles.textoBotonInfo}>Calendario</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -161,52 +159,77 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 30,
+    borderBottomWidth: 1, // Le agregamos una línea divisoria
+    borderBottomColor: COLORES.grisBorde,
+    paddingBottom: 20,
   },
   avatarContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORES.azulHevy,
+    borderRadius: 6, // Ya no es un círculo perfecto, es un cuadrado sutil
+    backgroundColor: "transparent", // Fondo hueco
+    borderWidth: 1,
+    borderColor: COLORES.azulHevy, // Borde neón
     justifyContent: "center",
     alignItems: "center",
     marginRight: 20,
   },
-  avatarTexto: { color: COLORES.textoBlanco, fontSize: 40, fontWeight: "bold" },
+  avatarTexto: {
+    color: COLORES.azulHevy, // Letra del mismo color que el borde
+    fontSize: 40,
+    fontWeight: "bold",
+  },
   infoUsuario: { flex: 1 },
   nombreUsuario: {
     color: COLORES.textoBlanco,
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: "900",
     marginBottom: 10,
+    textTransform: "uppercase", // Nombre siempre en mayúsculas
+    letterSpacing: 1,
   },
   filaEstadisticasTop: {
     flexDirection: "row",
-    justifyContent: "flex-start", // Alineamos a la izquierda ahora que hay un solo elemento
+    justifyContent: "flex-start",
   },
   cajaTop: { alignItems: "flex-start" },
-  labelTop: { color: COLORES.grisOscuro, fontSize: 14, marginBottom: 2 }, // Agrandé un poquito la letra para que quede mejor balanceado
-  valorTop: { color: COLORES.textoBlanco, fontSize: 20, fontWeight: "bold" }, // Agrandé el número de entrenos
+  labelTop: {
+    color: COLORES.grisOscuro,
+    fontSize: 12,
+    marginBottom: 4,
+    textTransform: "uppercase",
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+  valorTop: { color: COLORES.textoBlanco, fontSize: 20, fontWeight: "bold" },
 
   tituloSeccion: {
     color: COLORES.textoBlanco,
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontWeight: "900",
     marginTop: 10,
     marginBottom: 15,
+    textTransform: "uppercase", // Títulos en mayúsculas
+    letterSpacing: 1,
   },
 
   contenedorGraficoFalso: {
     height: 150,
-    backgroundColor: COLORES.fondoTarjeta,
-    borderRadius: 10,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+    borderStyle: "dashed", // Línea punteada técnica
+    borderRadius: 6,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 15,
   },
   textoProximamente: {
     color: COLORES.grisOscuro,
-    fontSize: 14,
-    fontStyle: "italic",
+    fontSize: 12,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
   filaResumenStats: {
@@ -216,9 +239,11 @@ const styles = StyleSheet.create({
   },
   cajaResumen: {
     flex: 1,
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "transparent", // Cajas transparentes con bordes
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 6,
     marginHorizontal: 5,
     alignItems: "center",
   },
@@ -234,7 +259,13 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 5,
   },
-  labelResumen: { color: COLORES.grisOscuro, fontSize: 12 },
+  labelResumen: {
+    color: COLORES.grisOscuro,
+    fontSize: 11,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
 
   grillaBotones: {
     flexDirection: "row",
@@ -243,15 +274,19 @@ const styles = StyleSheet.create({
   },
   botonInfo: {
     width: "48%",
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "transparent", // Botones Ghost
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 6,
     marginBottom: 15,
     alignItems: "center",
   },
   textoBotonInfo: {
     color: COLORES.textoBlanco,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });
