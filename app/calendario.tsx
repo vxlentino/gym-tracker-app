@@ -2,11 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORES } from "../colores";
 
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: COLORES.grisBorde,
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
   botonAtrasCabecera: { padding: 10, marginLeft: -10 },
   iconoAtras: {
@@ -120,46 +120,61 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "90deg" }],
   },
   tituloPrincipal: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "900",
     color: COLORES.textoBlanco,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
   },
   scrollContainer: { padding: 20, paddingBottom: 100 },
   textoVacio: {
     color: COLORES.grisClaro,
     textAlign: "center",
     marginTop: 50,
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 
   tarjetaHistorial: {
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "#1c1c1e",
     padding: 20,
-    borderRadius: 12,
-    marginBottom: 15,
+    borderRadius: 16,
+    marginBottom: 20,
   },
   fechaTexto: {
     color: COLORES.azulHevy,
-    fontSize: 14,
-    textTransform: "capitalize",
+    fontSize: 12,
+    textTransform: "uppercase",
     marginBottom: 5,
-    fontWeight: "bold",
+    fontWeight: "900",
+    letterSpacing: 1,
   },
   nombreRutina: {
     color: COLORES.textoBlanco,
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 15,
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: 20,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 
   filaStats: {
     flexDirection: "row",
     justifyContent: "space-between",
     borderTopWidth: 1,
-    borderTopColor: COLORES.fondoInput,
-    paddingTop: 15,
+    borderTopColor: "rgba(255,255,255,0.05)",
+    paddingTop: 20,
   },
   cajaStat: { alignItems: "center" },
-  labelStat: { color: COLORES.grisOscuro, fontSize: 12, marginBottom: 5 },
-  valorStat: { color: COLORES.textoBlanco, fontSize: 16, fontWeight: "bold" },
+  labelStat: {
+    color: COLORES.grisOscuro,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 5,
+  },
+  valorStat: { color: COLORES.textoBlanco, fontSize: 18, fontWeight: "bold" },
 });

@@ -1,10 +1,14 @@
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import Feather from "@expo/vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,10 +22,15 @@ export default function PantallaPerfil() {
     tiempoTotalSegundos: 0,
   });
 
-  // ESTADO PARA EL NOMBRE DE USUARIO
+  // ESTADOS DEL PERFIL
   const [nombreUsuario, setNombreUsuario] = useState("Atleta");
+  const [generoUsuario, setGeneroUsuario] = useState<string | null>(null);
 
-  // NUEVO ESTADO PARA EL FILTRO DEL GRÁFICO
+  // ESTADOS DE LA CONFIGURACIÓN (MODAL)
+  const [modalConfigVisible, setModalConfigVisible] = useState(false);
+  const [inputNombre, setInputNombre] = useState("");
+  const [inputGenero, setInputGenero] = useState<string | null>(null);
+
   const [filtroGrafico, setFiltroGrafico] = useState("Volumen");
 
   const router = useRouter();
@@ -29,17 +38,20 @@ export default function PantallaPerfil() {
   useFocusEffect(
     useCallback(() => {
       cargarHistorial();
-      cargarNombre(); // Cargamos el nombre cada vez que entra a la pestaña
+      cargarDatosPerfil();
     }, []),
   );
 
-  // FUNCIÓN PARA LEER EL NOMBRE DE LA MEMORIA
-  const cargarNombre = async () => {
+  // CARGAMOS NOMBRE Y GÉNERO
+  const cargarDatosPerfil = async () => {
     try {
       const nombreGuardado = await AsyncStorage.getItem("@nombre_usuario");
       if (nombreGuardado) setNombreUsuario(nombreGuardado);
+
+      const generoGuardado = await AsyncStorage.getItem("@genero_usuario");
+      if (generoGuardado) setGeneroUsuario(generoGuardado);
     } catch (error) {
-      console.error("Error al cargar nombre de usuario:", error);
+      console.error("Error al cargar datos del perfil:", error);
     }
   };
 
@@ -73,6 +85,30 @@ export default function PantallaPerfil() {
     const minutos = Math.floor((segundos % 3600) / 60);
     if (horas > 0) return `${horas}h ${minutos}m`;
     return `${minutos}m`;
+  };
+
+  // ABRIR CONFIGURACIÓN (Carga los datos actuales en el formulario)
+  const abrirConfiguracion = () => {
+    setInputNombre(nombreUsuario);
+    setInputGenero(generoUsuario);
+    setModalConfigVisible(true);
+  };
+
+  // GUARDAR CONFIGURACIÓN EN MEMORIA
+  const guardarConfiguracion = async () => {
+    try {
+      if (inputNombre.trim() !== "") {
+        await AsyncStorage.setItem("@nombre_usuario", inputNombre.trim());
+        setNombreUsuario(inputNombre.trim());
+      }
+      if (inputGenero) {
+        await AsyncStorage.setItem("@genero_usuario", inputGenero);
+        setGeneroUsuario(inputGenero);
+      }
+      setModalConfigVisible(false);
+    } catch (error) {
+      console.error("Error al guardar configuración:", error);
+    }
   };
 
   // MOCK DATA: Últimos 5 entrenamientos
@@ -110,7 +146,7 @@ export default function PantallaPerfil() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 120 }}
     >
-      {/* CABECERA ESTILO TÉCNICO */}
+      {/* CABECERA ESTILO TÉCNICO CON ENGRANAJE */}
       <View style={styles.cabeceraPerfil}>
         <View style={styles.avatarContainer}>
           <Text style={styles.avatarTexto}>
@@ -126,6 +162,12 @@ export default function PantallaPerfil() {
             </View>
           </View>
         </View>
+        <TouchableOpacity
+          style={styles.botonEngranaje}
+          onPress={abrirConfiguracion}
+        >
+          <Feather name="settings" size={24} color="white" />
+        </TouchableOpacity>
       </View>
 
       {/* SECCIÓN RESUMEN */}
@@ -147,7 +189,7 @@ export default function PantallaPerfil() {
           yAxisThickness={0}
           xAxisThickness={1}
           xAxisColor={COLORES.grisBorde}
-          rulesColor="rgba(255,255,255,0.05)" // Líneas extremadamente sutiles
+          rulesColor="rgba(255,255,255,0.05)"
           rulesType="solid"
           hideRules={false}
           yAxisTextStyle={{ color: COLORES.grisOscuro, fontSize: 11 }}
@@ -199,34 +241,123 @@ export default function PantallaPerfil() {
         </View>
       </View>
 
-      {/* BOTONERA INFORMACIÓN */}
+      {/* BOTONERA INFORMACIÓN CON ÍCONOS VECTORIALES */}
       <Text style={styles.tituloSeccion}>Información</Text>
       <View style={styles.grillaBotones}>
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/estadisticas")}
         >
+          <Ionicons name="stats-chart" size={24} color={COLORES.textoBlanco} />
           <Text style={styles.textoBotonInfo}>ESTADÍSTICAS</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/catalogo")}
         >
+          <MaterialCommunityIcons
+            name="dumbbell"
+            size={24}
+            color={COLORES.textoBlanco}
+          />
           <Text style={styles.textoBotonInfo}>EJERCICIOS</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/medidas")}
         >
+          <Ionicons name="body-outline" size={24} color={COLORES.textoBlanco} />
           <Text style={styles.textoBotonInfo}>MEDIDAS</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.botonInfo}
           onPress={() => router.push("/calendario")}
         >
+          <Ionicons
+            name="calendar-outline"
+            size={24}
+            color={COLORES.textoBlanco}
+          />
           <Text style={styles.textoBotonInfo}>CALENDARIO</Text>
         </TouchableOpacity>
       </View>
+
+      {/* MODAL DE CONFIGURACIÓN */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalConfigVisible}
+        onRequestClose={() => setModalConfigVisible(false)}
+      >
+        <View style={styles.modalOscuro}>
+          <View style={styles.cajaModal}>
+            <Text style={styles.tituloModal}>Configuración</Text>
+
+            <Text style={styles.labelFormulario}>Nombre de Atleta</Text>
+            <TextInput
+              style={styles.inputFormulario}
+              value={inputNombre}
+              onChangeText={setInputNombre}
+              placeholderTextColor="#888"
+            />
+
+            <Text style={styles.labelFormulario}>Perfil Físico (Medidas)</Text>
+            <View style={styles.filaBotonesGenero}>
+              <TouchableOpacity
+                style={[
+                  styles.botonSeleccionGenero,
+                  inputGenero === "Hombre" && styles.botonSeleccionGeneroActivo,
+                ]}
+                onPress={() => setInputGenero("Hombre")}
+              >
+                <Text
+                  style={[
+                    styles.textoGenero,
+                    inputGenero === "Hombre" && styles.textoGeneroActivo,
+                  ]}
+                >
+                  HOMBRE
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.botonSeleccionGenero,
+                  inputGenero === "Mujer" && styles.botonSeleccionGeneroActivo,
+                ]}
+                onPress={() => setInputGenero("Mujer")}
+              >
+                <Text
+                  style={[
+                    styles.textoGenero,
+                    inputGenero === "Mujer" && styles.textoGeneroActivo,
+                  ]}
+                >
+                  MUJER
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.filaBotonesAccion}>
+              <TouchableOpacity
+                style={styles.botonCancelar}
+                onPress={() => setModalConfigVisible(false)}
+              >
+                <Text style={styles.textoCancelar}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.botonGuardar}
+                onPress={guardarConfiguracion}
+              >
+                <Text style={styles.textoGuardar}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -243,13 +374,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 30,
-    borderBottomWidth: 0, // Quitamos bordes duros
+    borderBottomWidth: 0,
     paddingBottom: 10,
   },
   avatarContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40, // Círculo perfecto estilo Hevy
+    borderRadius: 40,
     backgroundColor: "transparent",
     borderWidth: 2,
     borderColor: COLORES.azulHevy,
@@ -268,7 +399,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "900",
     marginBottom: 10,
-    textTransform: "uppercase", // Nombre siempre en mayúsculas
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
   filaEstadisticasTop: {
@@ -285,6 +416,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   valorTop: { color: COLORES.textoBlanco, fontSize: 20, fontWeight: "bold" },
+  botonEngranaje: {
+    padding: 10,
+  },
+  iconoEngranaje: {
+    fontSize: 24,
+  },
 
   tituloSeccion: {
     color: COLORES.textoBlanco,
@@ -336,9 +473,9 @@ const styles = StyleSheet.create({
   },
   cajaResumen: {
     flex: 1,
-    backgroundColor: "#1c1c1e", // Fondo limpio y oscuro
+    backgroundColor: "#1c1c1e",
     padding: 20,
-    borderRadius: 16, // Bordes más suaves
+    borderRadius: 16,
     alignItems: "center",
   },
   valorResumenAzul: {
@@ -370,15 +507,128 @@ const styles = StyleSheet.create({
   botonInfo: {
     flexBasis: "47%",
     backgroundColor: "#1c1c1e",
-    padding: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 15,
     borderRadius: 16,
-    alignItems: "center",
+    flexDirection: "row", // Esto pone el ícono y el texto en la misma línea
+    alignItems: "center", // Los centra verticalmente
+    justifyContent: "flex-start", // Los tira un poquito para la izquierda
+    gap: 12, // El espacio entre el ícono y el texto
   },
   textoBotonInfo: {
     color: COLORES.textoBlanco,
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+
+  // ESTILOS DEL MODAL DE CONFIGURACIÓN
+  modalOscuro: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.85)",
+  },
+  cajaModal: {
+    backgroundColor: "#1c1c1e",
+    width: "85%",
+    borderRadius: 24,
+    padding: 30,
+    borderWidth: 1,
+    borderColor: COLORES.grisBorde,
+  },
+  tituloModal: {
+    color: COLORES.textoBlanco,
+    fontSize: 16,
+    fontWeight: "900",
+    textTransform: "uppercase",
     letterSpacing: 1.5,
+    marginBottom: 25,
+    textAlign: "center",
+  },
+  labelFormulario: {
+    color: COLORES.grisClaro,
+    fontSize: 11,
+    marginBottom: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  inputFormulario: {
+    backgroundColor: "#121212",
+    color: COLORES.textoBlanco,
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    fontSize: 14,
+    marginBottom: 25,
+    textAlign: "center",
+  },
+  filaBotonesGenero: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 30,
+  },
+  botonSeleccionGenero: {
+    flex: 1,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 15,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  botonSeleccionGeneroActivo: {
+    borderColor: COLORES.azulHevy,
+    backgroundColor: "rgba(41, 128, 255, 0.1)", // Azul muy translúcido
+  },
+  textoGenero: {
+    color: COLORES.grisClaro,
+    fontWeight: "900",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  textoGeneroActivo: {
+    color: COLORES.azulHevy,
+  },
+  filaBotonesAccion: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  botonCancelar: {
+    flex: 1,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 15,
+    borderRadius: 20,
+    marginRight: 10,
+    alignItems: "center",
+  },
+  textoCancelar: {
+    color: COLORES.grisClaro,
+    fontWeight: "900",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  botonGuardar: {
+    flex: 1,
+    backgroundColor: COLORES.azulHevy,
+    paddingVertical: 15,
+    borderRadius: 20,
+    marginLeft: 10,
+    alignItems: "center",
+  },
+  textoGuardar: {
+    color: COLORES.textoBlanco,
+    fontWeight: "900",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 });

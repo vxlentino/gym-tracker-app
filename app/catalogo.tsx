@@ -2,12 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    FlatList,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORES } from "../colores";
 import { EJERCICIOS_DB } from "../ejercicios";
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: COLORES.grisBorde,
+    borderBottomColor: "rgba(255,255,255,0.05)",
     marginBottom: 10,
   },
   botonAtrasCabecera: { padding: 10, marginLeft: -10 },
@@ -101,19 +101,40 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "90deg" }],
   },
   tituloPrincipal: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "900",
     color: COLORES.textoBlanco,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
   },
 
   itemEjercicio: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 15,
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: COLORES.fondoTarjeta,
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
-  imagenMini: { width: 50, height: 50, borderRadius: 8, marginRight: 15 },
-  textoNombre: { color: COLORES.textoBlanco, fontSize: 16, fontWeight: "bold" },
-  textoMusculo: { color: COLORES.grisOscuro, fontSize: 14, marginTop: 4 },
+  imagenMini: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    marginRight: 15,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  textoNombre: {
+    color: COLORES.textoBlanco,
+    fontSize: 14,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  textoMusculo: {
+    color: COLORES.grisOscuro,
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 });

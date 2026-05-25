@@ -2,11 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORES } from "../colores";
 
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: COLORES.grisBorde,
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
   botonAtrasCabecera: { padding: 10, marginLeft: -10 },
   iconoAtras: {
@@ -141,41 +141,56 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "90deg" }],
   },
   tituloPrincipal: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "900",
     color: COLORES.textoBlanco,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
   },
 
   scrollContainer: { padding: 20, paddingBottom: 50 },
 
   tarjetaDestaque: {
-    backgroundColor: COLORES.fondoTarjeta,
+    backgroundColor: "#1c1c1e",
     padding: 25,
-    borderRadius: 15,
+    borderRadius: 24,
     alignItems: "center",
     marginBottom: 30,
     borderWidth: 1,
     borderColor: COLORES.azulHevy,
   },
   iconoDestaque: { fontSize: 40, marginBottom: 10 },
-  tituloDestaque: { color: COLORES.grisClaro, fontSize: 16, marginBottom: 5 },
+  tituloDestaque: {
+    color: COLORES.azulHevy,
+    fontSize: 14,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
   valorDestaque: {
     color: COLORES.textoBlanco,
     fontSize: 32,
-    fontWeight: "bold",
+    fontWeight: "900",
     marginBottom: 5,
+    letterSpacing: 1.5,
   },
   subtituloDestaque: {
     color: COLORES.grisOscuro,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: "800",
     textAlign: "center",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 
   tituloSeccion: {
     color: COLORES.textoBlanco,
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 15,
+    fontSize: 14,
+    fontWeight: "900",
+    marginBottom: 20,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
   },
 
   grillaStats: {
@@ -185,23 +200,29 @@ const styles = StyleSheet.create({
   },
   cajaStat: {
     width: "48%",
-    backgroundColor: COLORES.fondoInput,
+    backgroundColor: "#1c1c1e",
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: "center",
     marginBottom: 15,
   },
   valorStatAzul: {
     color: COLORES.azulHevy,
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "bold",
     marginBottom: 5,
   },
   valorStat: {
     color: COLORES.textoBlanco,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
     marginBottom: 5,
   },
-  labelStat: { color: COLORES.grisOscuro, fontSize: 12 },
+  labelStat: {
+    color: COLORES.grisOscuro,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 });
