@@ -506,6 +506,14 @@ export default function PantallaRutina() {
     guardarRutina(datos);
   };
 
+  const actualizarNotaEjercicio = (idEj: string, nota: string) => {
+    const datos = ejerciciosSeleccionados.map((e) =>
+      e.id === idEj ? { ...e, notas: nota } : e,
+    );
+    setEjerciciosSeleccionados(datos);
+    guardarRutina(datos);
+  };
+
   const guardarDescansoPersonalizado = () => {
     const totalSegundos = tempMinutos * 60 + tempSegundos;
     const datos = ejerciciosSeleccionados.map((e) =>
@@ -739,9 +747,16 @@ export default function PantallaRutina() {
                         <Text style={styles.textoTarjeta} numberOfLines={2}>
                           {item.nombre}
                         </Text>
-                        <Text style={styles.textoSubInfo}>
-                          Agregar notas aquí...
-                        </Text>
+                        <TextInput
+                          style={styles.inputNotas}
+                          placeholder="Agregar notas aquí..."
+                          placeholderTextColor={COLORES.grisOscuro}
+                          value={item.notas || ""}
+                          onChangeText={(texto) =>
+                            actualizarNotaEjercicio(item.id, texto)
+                          }
+                          multiline={true}
+                        />
                         <TouchableOpacity
                           onPress={() => {
                             setTempMinutos(Math.floor(descansoActual / 60));
@@ -1733,6 +1748,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginVertical: 4,
     fontWeight: "600",
+  },
+  inputNotas: {
+    color: COLORES.grisClaro,
+    fontSize: 12,
+    marginVertical: 4,
+    fontWeight: "600",
+    padding: 0, // Saca el padding que Android le pone por defecto a los inputs
+    minHeight: 20,
   },
   botonEditarDescanso: {
     alignSelf: "flex-start",
