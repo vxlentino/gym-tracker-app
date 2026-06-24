@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  Alert, // Importamos Alert para lanzar el cartel de confirmación
   ScrollView,
   StyleSheet,
   Text,
@@ -22,13 +23,50 @@ export default function PantallaCalendario() {
     try {
       const datos = await AsyncStorage.getItem("@historial_entrenamientos");
       if (datos !== null) {
-        // Los ordenamos para que el más nuevo salga arriba
+        // Los ordenamos para que el más nuevo salga arriba de la pantalla
         const historialOrdenado = JSON.parse(datos).reverse();
         setHistorial(historialOrdenado);
       }
     } catch (error) {
       console.error(error);
     }
+  };
+
+  // --- NUEVA FUNCIÓN PARA ELIMINAR ---
+  const eliminarHistorial = (idParaBorrar: string) => {
+    // 1. Lanzamos la alerta para evitar borrados por accidente
+    Alert.alert(
+      "Eliminar Entrenamiento",
+      "¿Seguro que querés borrar este entrenamiento de tu historial?",
+      [
+        { text: "Cancelar", style: "cancel" }, // Si cancela, no hace nada
+        {
+          text: "Eliminar",
+          style: "destructive", // "destructive" lo pone en rojo en iOS
+          onPress: async () => {
+            // 2. Filtramos: Nos quedamos con todos los entrenamientos MENOS el que tiene el ID a borrar
+            const nuevoHistorial = historial.filter(
+              (sesion) => sesion.id !== idParaBorrar,
+            );
+
+            // 3. Actualizamos lo que se ve en la pantalla
+            setHistorial(nuevoHistorial);
+
+            try {
+              // 4. Como nosotros mostramos la lista invertida (los nuevos arriba),
+              // la volvemos a invertir para guardarla en su orden cronológico normal en la memoria del celu.
+              const historialParaGuardar = [...nuevoHistorial].reverse();
+              await AsyncStorage.setItem(
+                "@historial_entrenamientos",
+                JSON.stringify(historialParaGuardar),
+              );
+            } catch (error) {
+              console.error("Error al borrar del historial:", error);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const formatearFecha = (fechaISO: string) => {
@@ -51,6 +89,7 @@ export default function PantallaCalendario() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -70,10 +109,23 @@ export default function PantallaCalendario() {
         ) : (
           historial.map((sesion) => (
             <View key={sesion.id} style={styles.tarjetaHistorial}>
-              <Text style={styles.fechaTexto}>
-                {formatearFecha(sesion.fecha)}
-              </Text>
-              <Text style={styles.nombreRutina}>{sesion.rutinaNombre}</Text>
+              {/* Contenedor para poner la fecha y el tacho de basura en la misma línea */}
+              <View style={styles.cabeceraTarjeta}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fechaTexto}>
+                    {formatearFecha(sesion.fecha)}
+                  </Text>
+                  <Text style={styles.nombreRutina}>{sesion.rutinaNombre}</Text>
+                </View>
+
+                {/* BOTÓN DE ELIMINAR */}
+                <TouchableOpacity
+                  style={styles.botonEliminar}
+                  onPress={() => eliminarHistorial(sesion.id)}
+                >
+                  <Text style={styles.textoEliminar}>ELIMINAR</Text>
+                </TouchableOpacity>
+              </View>
 
               <View style={styles.filaStats}>
                 <View style={styles.cajaStat}>
@@ -143,6 +195,24 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 20,
   },
+
+  // Nuevo estilo para acomodar el botón en la cabecera
+  cabeceraTarjeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  botonEliminar: {
+    paddingLeft: 15,
+    paddingBottom: 10,
+  },
+  textoEliminar: {
+    color: COLORES.rojoPeligro,
+    fontWeight: "bold",
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+
   fechaTexto: {
     color: COLORES.azulHevy,
     fontSize: 12,

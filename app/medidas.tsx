@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -140,7 +140,7 @@ export default function PantallaMedidas() {
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -175,7 +175,7 @@ export default function PantallaMedidas() {
               <View style={styles.cabeceraTarjeta}>
                 <Text style={styles.fechaTexto}>📅 {registro.fecha}</Text>
                 <TouchableOpacity onPress={() => eliminarMedida(registro.id)}>
-                  <Text style={styles.textoEliminar}>🗑️</Text>
+                  <Text style={styles.textoEliminar}>ELIMINAR</Text>
                 </TouchableOpacity>
               </View>
 
@@ -440,7 +440,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
   },
-  textoEliminar: { fontSize: 18 },
+  textoEliminar: {
+    color: COLORES.rojoPeligro,
+    fontWeight: "bold",
+    fontSize: 11,
+    letterSpacing: 1,
+  },
 
   filaDatos: {
     flexDirection: "row",
