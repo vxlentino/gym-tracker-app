@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert, // Importamos Alert para lanzar el cartel de confirmación
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,7 +23,6 @@ export default function PantallaCalendario() {
     try {
       const datos = await AsyncStorage.getItem("@historial_entrenamientos");
       if (datos !== null) {
-        // Los ordenamos para que el más nuevo salga arriba de la pantalla
         const historialOrdenado = JSON.parse(datos).reverse();
         setHistorial(historialOrdenado);
       }
@@ -32,29 +31,21 @@ export default function PantallaCalendario() {
     }
   };
 
-  // --- NUEVA FUNCIÓN PARA ELIMINAR ---
   const eliminarHistorial = (idParaBorrar: string) => {
-    // 1. Lanzamos la alerta para evitar borrados por accidente
     Alert.alert(
       "Eliminar Entrenamiento",
       "¿Seguro que querés borrar este entrenamiento de tu historial?",
       [
-        { text: "Cancelar", style: "cancel" }, // Si cancela, no hace nada
+        { text: "Cancelar", style: "cancel" },
         {
           text: "Eliminar",
-          style: "destructive", // "destructive" lo pone en rojo en iOS
+          style: "destructive",
           onPress: async () => {
-            // 2. Filtramos: Nos quedamos con todos los entrenamientos MENOS el que tiene el ID a borrar
             const nuevoHistorial = historial.filter(
               (sesion) => sesion.id !== idParaBorrar,
             );
-
-            // 3. Actualizamos lo que se ve en la pantalla
             setHistorial(nuevoHistorial);
-
             try {
-              // 4. Como nosotros mostramos la lista invertida (los nuevos arriba),
-              // la volvemos a invertir para guardarla en su orden cronológico normal en la memoria del celu.
               const historialParaGuardar = [...nuevoHistorial].reverse();
               await AsyncStorage.setItem(
                 "@historial_entrenamientos",
@@ -109,7 +100,6 @@ export default function PantallaCalendario() {
         ) : (
           historial.map((sesion) => (
             <View key={sesion.id} style={styles.tarjetaHistorial}>
-              {/* Contenedor para poner la fecha y el tacho de basura en la misma línea */}
               <View style={styles.cabeceraTarjeta}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fechaTexto}>
@@ -118,7 +108,6 @@ export default function PantallaCalendario() {
                   <Text style={styles.nombreRutina}>{sesion.rutinaNombre}</Text>
                 </View>
 
-                {/* BOTÓN DE ELIMINAR */}
                 <TouchableOpacity
                   style={styles.botonEliminar}
                   onPress={() => eliminarHistorial(sesion.id)}
@@ -145,6 +134,14 @@ export default function PantallaCalendario() {
                   </Text>
                 </View>
               </View>
+
+              {/* --- ACÁ ESTÁ LO NUEVO: LAS NOTAS --- */}
+              {sesion.notas ? (
+                <View style={styles.cajaNotasHistorial}>
+                  <Text style={styles.labelStat}>Notas del entreno:</Text>
+                  <Text style={styles.textoNotasHistorial}>{sesion.notas}</Text>
+                </View>
+              ) : null}
             </View>
           ))
         )}
@@ -196,7 +193,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // Nuevo estilo para acomodar el botón en la cabecera
   cabeceraTarjeta: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -247,4 +243,18 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   valorStat: { color: COLORES.textoBlanco, fontSize: 18, fontWeight: "bold" },
+
+  // --- NUEVOS ESTILOS PARA LAS NOTAS ---
+  cajaNotasHistorial: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.05)",
+  },
+  textoNotasHistorial: {
+    color: COLORES.grisClaro,
+    fontSize: 13,
+    fontStyle: "italic", // Letra inclinada
+    lineHeight: 20,
+  },
 });

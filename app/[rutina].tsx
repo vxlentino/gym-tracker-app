@@ -1,6 +1,8 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library"; // <-- CAMBIAMOS SHARING POR MEDIA LIBRARY
 import * as Notifications from "expo-notifications";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -8,14 +10,19 @@ import DraggableFlatList, {
   ScaleDecorator,
 } from "react-native-draggable-flatlist";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ViewShot from "react-native-view-shot";
 
 import {
   Alert,
+  Animated,
   AppState,
+  Dimensions,
   FlatList,
   Image,
+  ImageBackground,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -32,7 +39,6 @@ import {
 import { COLORES } from "../colores";
 import { EJERCICIOS_DB, MUSCULOS_CREACION } from "../ejercicios";
 
-// FORZAMOS A QUE LA NOTIFICACIÓN SE VEA SIEMPRE PARA PODER TESTEAR
 Notifications.setNotificationHandler({
   handleNotification: async () =>
     ({
@@ -45,9 +51,8 @@ Notifications.setNotificationHandler({
 const PESTAÑAS_FILTRO = ["Todos", "Mis Ejercicios", ...MUSCULOS_CREACION];
 
 export default function PantallaRutina() {
-  // Esto lee cuántos píxeles mide la barra de abajo del celular que la esté usando
+  const viewShotRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
-
   const { rutina } = useLocalSearchParams();
   const router = useRouter();
 
@@ -66,10 +71,46 @@ export default function PantallaRutina() {
     null,
   );
   const [modalReordenarVisible, setModalReordenarVisible] = useState(false);
-  // --- ESTADOS PARA EL MODAL DE FINALIZAR ---
+
   const [modalTerminarVisible, setModalTerminarVisible] = useState(false);
-  const [mensajeRecords, setMensajeRecords] = useState(""); // Aquí guardaremos el texto de los récords
   const [recordsLogrados, setRecordsLogrados] = useState(0);
+  const [notasEntreno, setNotasEntreno] = useState("");
+  const [fondoFacha, setFondoFacha] = useState<string | null>(null);
+
+  // --- MAGIA VISUAL: PREVIEW MÁS GRANDE (85%) ---
+  const anchoPantalla = Dimensions.get("window").width;
+  const altoHistoria = anchoPantalla * (16 / 9);
+  const escalaVisual = 0.85; // Aumentamos al 85% para que se vea mucho mejor
+  const compensacionMargen = -(altoHistoria * ((1 - escalaVisual) / 2));
+
+  // --- ESTADOS PARA GESTOS Y TAMAÑO ---
+  const [escalaStats, setEscalaStats] = useState(1); // Control manual del tamaño
+  const [scrollHabilitado, setScrollEnabled] = useState(true);
+  const pan = useRef(new Animated.ValueXY()).current;
+
+  // Solo usamos PanResponder para ARRASTRAR (Garantiza 100% de fluidez)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        setScrollEnabled(false);
+        pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: () => {
+        setScrollEnabled(true);
+        pan.flattenOffset();
+      },
+      onPanResponderTerminate: () => {
+        setScrollEnabled(true);
+        pan.flattenOffset();
+      },
+    }),
+  ).current;
 
   const [filtroActivo, setFiltroActivo] = useState("Todos");
   const [ejerciciosSeleccionados, setEjerciciosSeleccionados] = useState<any[]>(
@@ -87,6 +128,7 @@ export default function PantallaRutina() {
   const [nuevosMusculosSecundarios, setNuevosMusculosSecundarios] = useState<
     string[]
   >([]);
+
   const toggleMusculoSecundario = (musculo: string) => {
     if (nuevosMusculosSecundarios.includes(musculo)) {
       setNuevosMusculosSecundarios(
@@ -109,21 +151,17 @@ export default function PantallaRutina() {
   const [segundos, setSegundos] = useState(0);
   const [activo, setActivo] = useState(false);
 
-  // NUEVO ESTADO PARA EL NOMBRE
   const [nombreUsuario, setNombreUsuario] = useState("Atleta");
-
   const appState = useRef(AppState.currentState);
   const tiempoFondo = useRef(Date.now());
 
   useEffect(() => {
-    // 1. Definimos la función de las notificaciones
     const configurarNotificaciones = async () => {
       const { status: existingStatus } =
         await Notifications.getPermissionsAsync();
       if (existingStatus !== "granted") {
         await Notifications.requestPermissionsAsync();
       }
-
       if (Platform.OS === "android") {
         await Notifications.setNotificationChannelAsync("default", {
           name: "Alertas de Descanso",
@@ -133,14 +171,11 @@ export default function PantallaRutina() {
         });
       }
     };
-
-    // 2. Definimos la función que busca tu nombre en la memoria
     const cargarNombre = async () => {
       const nombreGuardado = await AsyncStorage.getItem("@nombre_usuario");
       if (nombreGuardado) setNombreUsuario(nombreGuardado);
     };
 
-    // 3. Ejecutamos TODAS las funciones juntas al arrancar la pantalla
     configurarNotificaciones();
     cargarRutina();
     cargarEjerciciosPersonalizados();
@@ -156,7 +191,6 @@ export default function PantallaRutina() {
       if (pAct.nombre === rutina) {
         setRutinaActiva(true);
         setTiempoGlobal(Math.floor((Date.now() - pAct.timestamp) / 1000));
-
         const desc = await AsyncStorage.getItem("@descanso_activo");
         if (desc) {
           const pDesc = JSON.parse(desc);
@@ -178,7 +212,6 @@ export default function PantallaRutina() {
     } catch (error) {
       console.log("Ignorando error de limpieza");
     }
-
     if (tiempoEnSegundos > 0) {
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -191,7 +224,7 @@ export default function PantallaRutina() {
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds: tiempoEnSegundos,
           channelId: "default",
-        } as any, // EL SALVAVIDAS
+        } as any,
       });
     }
   };
@@ -208,7 +241,6 @@ export default function PantallaRutina() {
         setTiempoGlobal((prev) =>
           rutinaActiva ? prev + segundosPasados : prev,
         );
-
         setSegundos((prev) => {
           if (prev > 0 && activo) {
             const nuevoTiempo = prev - segundosPasados;
@@ -221,15 +253,12 @@ export default function PantallaRutina() {
           return prev;
         });
       }
-
       if (nextAppState === "background" || nextAppState === "inactive") {
         tiempoFondo.current = Date.now();
       }
       appState.current = nextAppState;
     });
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, [rutinaActiva, activo]);
 
   useEffect(() => {
@@ -246,7 +275,7 @@ export default function PantallaRutina() {
         setSegundos((seg) => {
           if (seg <= 1) {
             setActivo(false);
-            Vibration.vibrate([500, 500, 500]);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             return 0;
           }
           return seg - 1;
@@ -267,6 +296,21 @@ export default function PantallaRutina() {
       }),
     );
     programarNotificacionFin(tiempoEnSegundos);
+  };
+
+  const togglePausaDescanso = () => {
+    if (activo) {
+      setActivo(false);
+      Notifications.cancelAllScheduledNotificationsAsync();
+      AsyncStorage.removeItem("@descanso_activo");
+    } else {
+      setActivo(true);
+      AsyncStorage.setItem(
+        "@descanso_activo",
+        JSON.stringify({ endTime: Date.now() + segundos * 1000 }),
+      );
+      programarNotificacionFin(segundos);
+    }
   };
 
   const cargarRutina = async () => {
@@ -329,13 +373,10 @@ export default function PantallaRutina() {
       Alert.alert("Error", "El ejercicio debe tener un nombre obligatorio.");
       return;
     }
-
-    // COMO YA ES UNA LISTA, DIRECTAMENTE LA JUNTAMOS CON EL MÚSCULO PRINCIPAL
     const todosLosMusculos = [
       nuevoMusculoEjercicio,
       ...nuevosMusculosSecundarios,
     ];
-
     const nuevoEj = {
       id: ejercicioEditandoId ? ejercicioEditandoId : `custom_${Date.now()}`,
       nombre: nuevoNombreEjercicio.trim(),
@@ -361,9 +402,10 @@ export default function PantallaRutina() {
     } catch (error) {
       console.error(error);
     }
+
     setModalCrearEjercicioVisible(false);
     setEjercicioEditandoId(null);
-    setNuevosMusculosSecundarios([]); // Limpiamos las pastillas para el próximo ejercicio
+    setNuevosMusculosSecundarios([]);
   };
 
   const eliminarEjercicioDeDB = (idCustom: string) => {
@@ -463,6 +505,7 @@ export default function PantallaRutina() {
               if (nuevoEstado === true)
                 descansoParaActivar =
                   ej.descanso !== undefined ? ej.descanso : 120;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               return { ...serie, completada: nuevoEstado };
             }
             return serie;
@@ -585,44 +628,124 @@ export default function PantallaRutina() {
         }
       });
     });
+    setRecordsLogrados(records);
+    setRutinaActiva(false);
+    setModalTerminarVisible(true);
+  };
 
-    setRecordsLogrados(records); // Guardamos el número de récords
-    setModalTerminarVisible(true); // Abrimos el modal
+  const elegirFondoFacha = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permiso", "Necesitamos acceso a tu galería para el fondo.");
+      return;
+    }
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [9, 16],
+      quality: 1,
+    });
+    if (!result.canceled) setFondoFacha(result.assets[0].uri);
+  };
+
+  // --- NUEVA FUNCIÓN PARA GUARDAR EN GALERÍA STRICTAMENTE ---
+  const guardarEnGaleria = async () => {
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
+      if (status !== "granted") {
+        Alert.alert("Permiso", "Necesitamos permiso para guardar la foto.");
+        return;
+      }
+
+      const uri = await viewShotRef.current.capture();
+      await MediaLibrary.saveToLibraryAsync(uri);
+
+      Alert.alert(
+        "¡Éxito! 📸",
+        "El póster se guardó en tu galería con máxima calidad.",
+      );
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Hubo un problema al guardar la imagen.");
+    }
+  };
+
+  const descartarEntrenamiento = () => {
+    Alert.alert(
+      "Descartar Entreno",
+      "¿Seguro que querés descartar este entrenamiento? Perderás el progreso de hoy.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Descartar",
+          style: "destructive",
+          onPress: async () => {
+            await AsyncStorage.removeItem("@rutina_activa");
+            await AsyncStorage.removeItem("@descanso_activo");
+            Notifications.cancelAllScheduledNotificationsAsync();
+            const resetDatos = ejerciciosSeleccionados.map((ej) => ({
+              ...ej,
+              series: ej.series.map((s: any) => ({ ...s, completada: false })),
+            }));
+            guardarRutina(resetDatos);
+            setRutinaActiva(false);
+            setTiempoGlobal(0);
+            setActivo(false);
+            setSegundos(0);
+            setModalTerminarVisible(false);
+            router.back();
+          },
+        },
+      ],
+    );
   };
 
   const ejecutarFinalizacion = async () => {
-    const nuevaSesion = {
-      id: Date.now().toString(),
-      fecha: new Date().toISOString(),
-      rutinaNombre: rutina,
-      volumen: calcularVolumen(),
-      ejercicios: ejerciciosSeleccionados,
-      tiempo: tiempoGlobal,
-    };
-    const nuevoHistorial = [...historial, nuevaSesion];
-    setHistorial(nuevoHistorial);
+    try {
+      const nuevaSesion = {
+        id: Date.now().toString(),
+        fecha: new Date().toISOString(),
+        rutinaNombre: rutina,
+        volumen: calcularVolumen(),
+        ejercicios: ejerciciosSeleccionados,
+        tiempo: tiempoGlobal,
+        notas: notasEntreno,
+      };
 
-    await AsyncStorage.setItem(
-      "@historial_entrenamientos",
-      JSON.stringify(nuevoHistorial),
-    );
-    await AsyncStorage.removeItem("@rutina_activa");
-    await AsyncStorage.removeItem("@descanso_activo");
+      const nuevoHistorial = [...historial, nuevaSesion];
+      setHistorial(nuevoHistorial);
 
-    Notifications.cancelAllScheduledNotificationsAsync();
+      await AsyncStorage.setItem(
+        "@historial_entrenamientos",
+        JSON.stringify(nuevoHistorial),
+      );
+      await AsyncStorage.removeItem("@rutina_activa");
+      await AsyncStorage.removeItem("@descanso_activo");
+      Notifications.cancelAllScheduledNotificationsAsync();
 
-    const resetDatos = ejerciciosSeleccionados.map((ej) => ({
-      ...ej,
-      series: ej.series.map((s: any) => ({ ...s, completada: false })),
-    }));
-    guardarRutina(resetDatos);
+      const resetDatos = ejerciciosSeleccionados.map((ej) => ({
+        ...ej,
+        series: ej.series.map((s: any) => ({ ...s, completada: false })),
+      }));
+      guardarRutina(resetDatos);
 
-    setRutinaActiva(false);
-    setTiempoGlobal(0);
-    setActivo(false);
-    setSegundos(0);
-    setModalTerminarVisible(false);
-    router.back();
+      setRutinaActiva(false);
+      setTiempoGlobal(0);
+      setActivo(false);
+      setSegundos(0);
+      setNotasEntreno("");
+      setFondoFacha(null);
+      setEscalaStats(1); // Reseteamos tamaño
+      pan.setValue({ x: 0, y: 0 }); // Reseteamos posición
+      setModalTerminarVisible(false);
+      router.back();
+    } catch (error) {
+      console.log(error);
+      Alert.alert(
+        "Error",
+        "Hubo un problema al guardar la rutina en el calendario.",
+      );
+    }
   };
 
   const renderBotonEliminarOculto = (idEjercicio: string, idSerie: string) => (
@@ -736,7 +859,6 @@ export default function PantallaRutina() {
                       style={styles.contenedorNombreImagen}
                       onPress={() => setEjercicioDetalle(datosCompletos)}
                     >
-                      {/* Si hay miniatura dibuja la imagen, sino no hace nada */}
                       {urlMiniatura && (
                         <Image
                           source={{ uri: urlMiniatura }}
@@ -925,49 +1047,80 @@ export default function PantallaRutina() {
                 onPress={() =>
                   setSegundos((s) => {
                     const n = Math.max(0, s - 15);
-                    AsyncStorage.setItem(
-                      "@descanso_activo",
-                      JSON.stringify({ endTime: Date.now() + n * 1000 }),
-                    );
-                    if (n > 0) programarNotificacionFin(n);
-                    else Notifications.cancelAllScheduledNotificationsAsync();
+                    if (activo) {
+                      AsyncStorage.setItem(
+                        "@descanso_activo",
+                        JSON.stringify({ endTime: Date.now() + n * 1000 }),
+                      );
+                      if (n > 0) programarNotificacionFin(n);
+                      else Notifications.cancelAllScheduledNotificationsAsync();
+                    }
                     return n;
                   })
                 }
               >
                 <Text style={styles.textoBtnTimer}>-15</Text>
               </TouchableOpacity>
-              <Text style={styles.textoTimerGigante}>
+
+              <Text
+                style={[
+                  styles.textoTimerGigante,
+                  !activo && { color: COLORES.grisClaro },
+                ]}
+              >
                 {formatearDescanso(segundos)}
               </Text>
+
               <TouchableOpacity
                 style={styles.btnRestarSumar}
                 onPress={() =>
                   setSegundos((s) => {
                     const n = s + 15;
-                    AsyncStorage.setItem(
-                      "@descanso_activo",
-                      JSON.stringify({ endTime: Date.now() + n * 1000 }),
-                    );
-                    programarNotificacionFin(n);
+                    if (activo) {
+                      AsyncStorage.setItem(
+                        "@descanso_activo",
+                        JSON.stringify({ endTime: Date.now() + n * 1000 }),
+                      );
+                      programarNotificacionFin(n);
+                    }
                     return n;
                   })
                 }
               >
                 <Text style={styles.textoBtnTimer}>+15</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.btnOmitir}
-                onPress={() => {
-                  setSegundos(0);
-                  setActivo(false);
-                  Vibration.vibrate([100]);
-                  AsyncStorage.removeItem("@descanso_activo");
-                  Notifications.cancelAllScheduledNotificationsAsync();
-                }}
-              >
-                <Text style={styles.textoBtnOmitir}>Omitir</Text>
-              </TouchableOpacity>
+
+              <View style={styles.filaBotonesAccionTimer}>
+                <TouchableOpacity
+                  style={[
+                    styles.btnPausarTimer,
+                    !activo && { borderColor: COLORES.azulHevy },
+                  ]}
+                  onPress={togglePausaDescanso}
+                >
+                  <Text
+                    style={[
+                      styles.textoBtnPausar,
+                      !activo && { color: COLORES.azulHevy },
+                    ]}
+                  >
+                    {activo ? "⏸" : "▶️"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.btnOmitir}
+                  onPress={() => {
+                    setSegundos(0);
+                    setActivo(false);
+                    Vibration.vibrate([100]);
+                    AsyncStorage.removeItem("@descanso_activo");
+                    Notifications.cancelAllScheduledNotificationsAsync();
+                  }}
+                >
+                  <Text style={styles.textoBtnOmitir}>Omitir</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -1233,8 +1386,6 @@ export default function PantallaRutina() {
                                 setNuevoMusculoEjercicio(item.musculo);
                                 setNuevoMediaUrl(item.imagenUrl || "");
                                 setNuevaDescripcion(item.descripcion || "");
-
-                                // CARGAMOS LOS SECUNDARIOS (sacamos el primero que es el principal)
                                 const secundariosPrevios =
                                   item.musculosTrabajados
                                     ? item.musculosTrabajados.slice(1)
@@ -1242,7 +1393,6 @@ export default function PantallaRutina() {
                                 setNuevosMusculosSecundarios(
                                   secundariosPrevios,
                                 );
-
                                 setModalCrearEjercicioVisible(true);
                               }}
                             >
@@ -1288,7 +1438,10 @@ export default function PantallaRutina() {
           >
             <View style={styles.modalOscuro}>
               <View style={styles.cajaCrearEjercicioScroll}>
-                <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                >
                   <Text style={styles.tituloCajaDescanso}>
                     {ejercicioEditandoId
                       ? "Editar Ejercicio"
@@ -1336,18 +1489,15 @@ export default function PantallaRutina() {
                   </Text>
                   <View style={styles.contenedorFiltrosCreacion}>
                     {MUSCULOS_CREACION.map((m) => {
-                      // No mostramos el músculo que ya eligió como principal
                       if (m === nuevoMusculoEjercicio) return null;
-
                       const seleccionado =
                         nuevosMusculosSecundarios.includes(m);
-
                       return (
                         <TouchableOpacity
                           key={`secundario-${m}`}
                           style={[
                             styles.botonFiltroCreacion,
-                            seleccionado && styles.botonFiltroActivo, // Se pinta si está seleccionado
+                            seleccionado && styles.botonFiltroActivo,
                           ]}
                           onPress={() => toggleMusculoSecundario(m)}
                         >
@@ -1543,60 +1693,253 @@ export default function PantallaRutina() {
               </View>
             </View>
           </Modal>
-          {/* --- MODAL ENTRENAMIENTO FINALIZADO ESTILO HEVY --- */}
+
+          {/* --- PANTALLA COMPLETA DE GUARDADO --- */}
           <Modal
-            animationType="fade"
-            transparent={true}
+            animationType="slide"
+            transparent={false}
             visible={modalTerminarVisible}
-            onRequestClose={() => setModalTerminarVisible(false)}
+            onRequestClose={() => {
+              setModalTerminarVisible(false);
+              setRutinaActiva(true);
+            }}
           >
-            <View style={styles.modalOscuro}>
-              <View style={styles.cajaModal}>
-                <Text style={styles.tituloModalExito}>
-                  ¡ENTRENAMIENTO FINALIZADO!
-                </Text>
+            <View style={styles.modalPantallaCompleta}>
+              {/* HEADER CON ATRÁS ROJO */}
+              <View style={styles.headerGuardar}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setModalTerminarVisible(false);
+                    setRutinaActiva(true);
+                  }}
+                  style={{ padding: 10, marginLeft: -10 }}
+                >
+                  <Text
+                    style={{
+                      color: COLORES.rojoPeligro,
+                      fontWeight: "bold",
+                      fontSize: 14,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Atrás
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.tituloGuardar}>Guardar</Text>
+                <TouchableOpacity
+                  style={styles.botonGuardarTop}
+                  onPress={ejecutarFinalizacion}
+                >
+                  <Text style={styles.textoBotonGuardarTop}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
 
-                {/* Texto del mensaje */}
-                <Text style={styles.textoDescripcionExito}>
-                  {recordsLogrados > 0
-                    ? `¡Felicidades, ${nombreUsuario}!\n¡Rompiste ${recordsLogrados} récords personales hoy!`
-                    : `¡Gran trabajo, ${nombreUsuario}!`}
-                </Text>
-
-                {/* Ícono de trofeo (aparece solo si hubo récords) */}
-                {recordsLogrados > 0 && (
-                  <View style={{ alignItems: "center", marginBottom: 20 }}>
-                    <MaterialCommunityIcons
-                      name="trophy-award"
-                      size={48}
-                      color="#FFD700" // Un color dorado tipo trofeo
-                    />
-                  </View>
-                )}
-
-                {/* Tarjetitas de estadísticas */}
-                <View style={styles.filaResumenModal}>
-                  <View style={styles.cajaDatoModal}>
-                    <Text style={styles.labelDatoModal}>VOLUMEN</Text>
-                    <Text style={styles.valorDatoModal}>
-                      {calcularVolumen()} kg
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                scrollEnabled={scrollHabilitado}
+              >
+                {/* --- CONTROLES DE FOTO Y TAMAÑO --- */}
+                <View style={styles.filaControlesFoto}>
+                  <TouchableOpacity
+                    style={styles.botonControlPeque}
+                    onPress={elegirFondoFacha}
+                  >
+                    <Text style={styles.textoControlPeque}>
+                      {fondoFacha ? "🖼️ Cambiar Fondo" : "🖼️ Poner Fondo"}
                     </Text>
-                  </View>
-                  <View style={styles.cajaDatoModal}>
-                    <Text style={styles.labelDatoModal}>SERIES</Text>
-                    <Text style={styles.valorDatoModal}>
-                      {calcularSeries()}
-                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.controlTamaño}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setEscalaStats((e) => Math.max(0.4, e - 0.1))
+                      }
+                      style={styles.botonZoom}
+                    >
+                      <Text style={styles.textoZoom}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.textoControlPeque}>Tamaño</Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setEscalaStats((e) => Math.min(2, e + 0.1))
+                      }
+                      style={styles.botonZoom}
+                    >
+                      <Text style={styles.textoZoom}>+</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.botonFinalizarEntreno}
-                  onPress={ejecutarFinalizacion}
+                {/* --- ÁREA DE LA FOTO GIGANTE ACHICADA VISUALMENTE PARA PREVIEW --- */}
+                <View
+                  style={{
+                    width: anchoPantalla,
+                    height: altoHistoria,
+                    transform: [{ scale: escalaVisual }],
+                    marginTop: compensacionMargen,
+                    marginBottom: compensacionMargen,
+                    alignSelf: "center",
+                    borderRadius: 24, // Para que vos lo veas redondo en el preview
+                    overflow: "hidden", // Corta las esquinas
+                  }}
                 >
-                  <Text style={styles.textoBotonFinalizar}>FINALIZAR</Text>
-                </TouchableOpacity>
-              </View>
+                  {/* Este componente captura la resolucion ORIGINAL 100% de la pantalla (1080x1920 aprox) */}
+                  <ViewShot
+                    ref={viewShotRef}
+                    options={{ format: "png", quality: 1.0 }}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      backgroundColor: "#121212",
+                    }}
+                  >
+                    <ImageBackground
+                      source={fondoFacha ? { uri: fondoFacha } : undefined}
+                      style={{ flex: 1, justifyContent: "center" }}
+                      imageStyle={{
+                        opacity: 0.4,
+                        backgroundColor: "#000",
+                        resizeMode: "cover",
+                      }}
+                    >
+                      {/* TEXTOS ANIMADOS (Mover con el dedo) */}
+                      <Animated.View
+                        {...panResponder.panHandlers}
+                        style={[
+                          pan.getLayout(),
+                          {
+                            transform: [{ scale: escalaStats }], // Usamos los botones para cambiar el tamaño
+                            alignItems: "center",
+                            padding: 20,
+                            width: "100%",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.nombreRutinaGuardar,
+                            fondoFacha && styles.textoCentradoAdidas,
+                          ]}
+                        >
+                          {rutina}
+                        </Text>
+
+                        <View
+                          style={[styles.filaStatsGuardar, { width: "100%" }]}
+                        >
+                          <View
+                            style={[
+                              styles.cajaStatGuardar,
+                              fondoFacha && { alignItems: "center" },
+                            ]}
+                          >
+                            <Text style={styles.labelStatGuardar}>
+                              Duración
+                            </Text>
+                            <Text style={styles.valorStatAzul}>
+                              {formatearTiempoGlobal(tiempoGlobal)}
+                            </Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.cajaStatGuardar,
+                              fondoFacha && { alignItems: "center" },
+                            ]}
+                          >
+                            <Text style={styles.labelStatGuardar}>Volumen</Text>
+                            <Text style={styles.valorStatGuardar}>
+                              {calcularVolumen()} kg
+                            </Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.cajaStatGuardar,
+                              fondoFacha && { alignItems: "center" },
+                            ]}
+                          >
+                            <Text style={styles.labelStatGuardar}>Series</Text>
+                            <Text style={styles.valorStatGuardar}>
+                              {calcularSeries()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.separador,
+                            fondoFacha && { opacity: 0 },
+                          ]}
+                        />
+
+                        <Text
+                          style={[
+                            styles.valorStatAzul,
+                            fondoFacha && styles.textoCentradoAdidas,
+                          ]}
+                        >
+                          {new Date().toLocaleDateString("es-AR", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </Text>
+
+                        {recordsLogrados > 0 && (
+                          <View
+                            style={[
+                              styles.cajaRecordsGuardar,
+                              fondoFacha && {
+                                alignSelf: "center",
+                                marginTop: 30,
+                              },
+                            ]}
+                          >
+                            <Text style={styles.iconoRecordG}>🏆</Text>
+                            <Text style={styles.textoRecordG}>
+                              ¡Rompiste {recordsLogrados} récord
+                              {recordsLogrados > 1 ? "s" : ""} personal
+                              {recordsLogrados > 1 ? "es" : ""} hoy!
+                            </Text>
+                          </View>
+                        )}
+                      </Animated.View>
+                    </ImageBackground>
+                  </ViewShot>
+                </View>
+
+                {/* --- NOTAS Y EXPORTAR --- */}
+                <View style={{ padding: 20, paddingBottom: 50 }}>
+                  <Text style={styles.labelStatGuardar}>Descripción</Text>
+                  <TextInput
+                    style={styles.inputNotasEntrenamiento}
+                    placeholder="¿Cómo ha ido tu entrenamiento? Deja algunas notas aquí..."
+                    placeholderTextColor="#666"
+                    multiline={true}
+                    value={notasEntreno}
+                    onChangeText={setNotasEntreno}
+                  />
+                  <View style={styles.separador} />
+
+                  <TouchableOpacity
+                    style={styles.botonCompartirTexto}
+                    onPress={guardarEnGaleria}
+                  >
+                    <Text style={styles.textoCompartirTexto}>
+                      Guardar Imagen en Galería 💾
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.botonDescartar}
+                    onPress={descartarEntrenamiento}
+                  >
+                    <Text style={styles.textoDescartar}>Descartar Entreno</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </Modal>
         </View>
@@ -1754,7 +2097,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginVertical: 4,
     fontWeight: "600",
-    padding: 0, // Saca el padding que Android le pone por defecto a los inputs
+    padding: 0,
     minHeight: 20,
   },
   botonEditarDescanso: {
@@ -1963,13 +2306,31 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
     letterSpacing: 1,
   },
+  filaBotonesAccionTimer: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  btnPausarTimer: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    justifyContent: "center",
+  },
+  textoBtnPausar: {
+    color: COLORES.textoBlanco,
+    fontSize: 14,
+  },
   btnOmitir: {
     backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: COLORES.rojoPeligro,
     paddingVertical: 12,
-    paddingHorizontal: 18,
+    paddingHorizontal: 15,
     borderRadius: 20,
+    justifyContent: "center",
   },
   textoBtnOmitir: {
     color: COLORES.rojoPeligro,
@@ -1979,7 +2340,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // --- MODALES ---
   modalOscuro: {
     flex: 1,
     justifyContent: "flex-end",
@@ -2491,5 +2851,168 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 1,
+  },
+  modalPantallaCompleta: {
+    flex: 1,
+    backgroundColor: "#121212",
+  },
+  headerGuardar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  tituloGuardar: {
+    color: COLORES.textoBlanco,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  botonGuardarTop: {
+    backgroundColor: COLORES.azulHevy,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  textoBotonGuardarTop: {
+    color: COLORES.textoBlanco,
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  nombreRutinaGuardar: {
+    color: COLORES.textoBlanco,
+    fontSize: 22,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 25,
+  },
+  filaStatsGuardar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  cajaStatGuardar: {
+    flex: 1,
+  },
+  labelStatGuardar: {
+    color: COLORES.grisOscuro,
+    fontSize: 11,
+    marginBottom: 8,
+  },
+  valorStatGuardar: {
+    color: COLORES.textoBlanco,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  valorStatAzul: {
+    color: COLORES.azulHevy,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  separador: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    marginVertical: 20,
+  },
+  cajaRecordsGuardar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 215, 0, 0.1)",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.3)",
+  },
+  iconoRecordG: {
+    fontSize: 18,
+    marginRight: 10,
+  },
+  textoRecordG: {
+    color: "#FFD700",
+    fontWeight: "bold",
+    fontSize: 13,
+  },
+  inputNotasEntrenamiento: {
+    color: COLORES.textoBlanco,
+    fontSize: 14,
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
+  botonCompartirTexto: {
+    alignItems: "center",
+    paddingVertical: 15,
+    marginBottom: 20,
+  },
+  textoCompartirTexto: {
+    color: COLORES.azulHevy,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  botonDescartar: {
+    alignItems: "center",
+    paddingVertical: 15,
+  },
+  textoDescartar: {
+    color: COLORES.rojoPeligro,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  botonElegirFondo: {
+    padding: 20,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  textoElegirFondo: {
+    color: COLORES.grisClaro,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  textoCentradoAdidas: {
+    textAlign: "center",
+    fontSize: 28,
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
+  },
+  filaControlesFoto: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  botonControlPeque: {
+    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
+  },
+  textoControlPeque: {
+    color: COLORES.grisClaro,
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+  controlTamaño: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
+    paddingHorizontal: 5,
+  },
+  botonZoom: {
+    padding: 10,
+    paddingHorizontal: 15,
+  },
+  textoZoom: {
+    color: COLORES.textoBlanco,
+    fontSize: 18,
+    fontWeight: "bold",
   },
 });
