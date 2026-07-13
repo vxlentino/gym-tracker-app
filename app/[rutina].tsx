@@ -2,7 +2,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import * as MediaLibrary from "expo-media-library"; // <-- CAMBIAMOS SHARING POR MEDIA LIBRARY
+import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -37,7 +37,7 @@ import {
   Swipeable,
 } from "react-native-gesture-handler";
 import { COLORES } from "../colores";
-import { EJERCICIOS_DB, MUSCULOS_CREACION } from "../ejercicios";
+import { EJERCICIOS_DB, EQUIPAMIENTO, GRUPOS_MUSCULARES } from "../ejercicios";
 
 Notifications.setNotificationHandler({
   handleNotification: async () =>
@@ -48,7 +48,12 @@ Notifications.setNotificationHandler({
     }) as any,
 });
 
-const PESTAÑAS_FILTRO = ["Todos", "Mis Ejercicios", ...MUSCULOS_CREACION];
+const PESTAÑAS_FILTRO = [
+  "Todos",
+  "Mis Ejercicios",
+  ...GRUPOS_MUSCULARES,
+  ...EQUIPAMIENTO,
+];
 
 export default function PantallaRutina() {
   const viewShotRef = useRef<any>(null);
@@ -73,22 +78,21 @@ export default function PantallaRutina() {
   const [modalReordenarVisible, setModalReordenarVisible] = useState(false);
 
   const [modalTerminarVisible, setModalTerminarVisible] = useState(false);
+  const [modalCompartirVisible, setModalCompartirVisible] = useState(false);
+
   const [recordsLogrados, setRecordsLogrados] = useState(0);
   const [notasEntreno, setNotasEntreno] = useState("");
   const [fondoFacha, setFondoFacha] = useState<string | null>(null);
 
-  // --- MAGIA VISUAL: PREVIEW MÁS GRANDE (85%) ---
   const anchoPantalla = Dimensions.get("window").width;
   const altoHistoria = anchoPantalla * (16 / 9);
-  const escalaVisual = 0.85; // Aumentamos al 85% para que se vea mucho mejor
+  const escalaVisual = 0.85;
   const compensacionMargen = -(altoHistoria * ((1 - escalaVisual) / 2));
 
-  // --- ESTADOS PARA GESTOS Y TAMAÑO ---
-  const [escalaStats, setEscalaStats] = useState(1); // Control manual del tamaño
+  const [escalaStats, setEscalaStats] = useState(1);
   const [scrollHabilitado, setScrollEnabled] = useState(true);
   const pan = useRef(new Animated.ValueXY()).current;
 
-  // Solo usamos PanResponder para ARRASTRAR (Garantiza 100% de fluidez)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -112,7 +116,14 @@ export default function PantallaRutina() {
     }),
   ).current;
 
-  const [filtroActivo, setFiltroActivo] = useState("Todos");
+  const [busquedaCatalog, setBusquedaCatalog] = useState("");
+  const [filtroEquipamientoCat, setFiltroEquipamientoCat] =
+    useState("Todo Equipamiento");
+  const [filtroMusculoCat, setFiltroMusculoCat] = useState("Todos Músculos");
+  const [busquedaSubModal, setBusquedaSubModal] = useState("");
+
+  const [verMisEjercicios, setVerMisEjercicios] = useState(false);
+
   const [ejerciciosSeleccionados, setEjerciciosSeleccionados] = useState<any[]>(
     [],
   );
@@ -122,12 +133,22 @@ export default function PantallaRutina() {
   const [historial, setHistorial] = useState<any[]>([]);
 
   const [nuevoNombreEjercicio, setNuevoNombreEjercicio] = useState("");
-  const [nuevoMusculoEjercicio, setNuevoMusculoEjercicio] = useState("Piernas");
+  const [nuevoEquipamiento, setNuevoEquipamiento] = useState("Ninguno");
+  const [nuevoMusculoEjercicio, setNuevoMusculoEjercicio] = useState("Pecho");
   const [nuevoMediaUrl, setNuevoMediaUrl] = useState("");
   const [nuevaDescripcion, setNuevaDescripcion] = useState("");
   const [nuevosMusculosSecundarios, setNuevosMusculosSecundarios] = useState<
     string[]
   >([]);
+
+  const [tipoSelectorAbierto, setTipoSelectorAbierto] = useState<
+    | "equipamiento"
+    | "primario"
+    | "secundario"
+    | "filtroEquipoCat"
+    | "filtroMusculoCat"
+    | null
+  >(null);
 
   const toggleMusculoSecundario = (musculo: string) => {
     if (nuevosMusculosSecundarios.includes(musculo)) {
@@ -215,7 +236,7 @@ export default function PantallaRutina() {
     if (tiempoEnSegundos > 0) {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: "¡Descanso terminado! 🏋️‍♂️",
+          title: "¡Descanso terminado!",
           body: `Es hora de la siguiente serie, ${nombreUsuario}.`,
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
@@ -380,6 +401,7 @@ export default function PantallaRutina() {
     const nuevoEj = {
       id: ejercicioEditandoId ? ejercicioEditandoId : `custom_${Date.now()}`,
       nombre: nuevoNombreEjercicio.trim(),
+      equipamiento: nuevoEquipamiento,
       musculo: nuevoMusculoEjercicio,
       imagenUrl: nuevoMediaUrl,
       gifUrl: "",
@@ -437,10 +459,24 @@ export default function PantallaRutina() {
   };
 
   const TODOS_LOS_EJERCICIOS = [...EJERCICIOS_DB, ...ejerciciosPersonalizados];
+
   const ejerciciosFiltrados = TODOS_LOS_EJERCICIOS.filter((e) => {
-    if (filtroActivo === "Todos") return true;
-    if (filtroActivo === "Mis Ejercicios") return e.id.includes("custom_");
-    return e.musculo === filtroActivo;
+    const coincideBusqueda = e.nombre
+      .toLowerCase()
+      .includes(busquedaCatalog.toLowerCase());
+    const coincideMusculo =
+      filtroMusculoCat === "Todos Músculos" ||
+      e.musculo === filtroMusculoCat ||
+      (e.musculosTrabajados && e.musculosTrabajados.includes(filtroMusculoCat));
+    const coincideEquipo =
+      filtroEquipamientoCat === "Todo Equipamiento" ||
+      e.equipamiento === filtroEquipamientoCat;
+
+    const coincideCustom = verMisEjercicios ? e.id.includes("custom") : true;
+
+    return (
+      coincideBusqueda && coincideMusculo && coincideEquipo && coincideCustom
+    );
   });
 
   const agregarEjercicio = (ejData: any) => {
@@ -648,7 +684,7 @@ export default function PantallaRutina() {
     if (!result.canceled) setFondoFacha(result.assets[0].uri);
   };
 
-  // --- NUEVA FUNCIÓN PARA GUARDAR EN GALERÍA STRICTAMENTE ---
+  // --- FUNCIÓN QUE GUARDA Y CIERRA EL ENTRENAMIENTO AUTOMÁTICAMENTE ---
   const guardarEnGaleria = async () => {
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync(true);
@@ -661,8 +697,14 @@ export default function PantallaRutina() {
       await MediaLibrary.saveToLibraryAsync(uri);
 
       Alert.alert(
-        "¡Éxito! 📸",
-        "El póster se guardó en tu galería con máxima calidad.",
+        "¡Éxito!",
+        "El póster se guardó en tu galería y el entrenamiento ha finalizado.",
+        [
+          {
+            text: "Excelente",
+            onPress: () => ejecutarFinalizacion(), // Ejecuta el cierre de entrenamiento
+          },
+        ],
       );
     } catch (error) {
       console.error(error);
@@ -692,6 +734,7 @@ export default function PantallaRutina() {
             setTiempoGlobal(0);
             setActivo(false);
             setSegundos(0);
+            setModalCompartirVisible(false);
             setModalTerminarVisible(false);
             router.back();
           },
@@ -735,8 +778,9 @@ export default function PantallaRutina() {
       setSegundos(0);
       setNotasEntreno("");
       setFondoFacha(null);
-      setEscalaStats(1); // Reseteamos tamaño
-      pan.setValue({ x: 0, y: 0 }); // Reseteamos posición
+      setEscalaStats(1);
+      pan.setValue({ x: 0, y: 0 });
+      setModalCompartirVisible(false);
       setModalTerminarVisible(false);
       router.back();
     } catch (error) {
@@ -812,7 +856,10 @@ export default function PantallaRutina() {
 
           {!rutinaActiva && (
             <TouchableOpacity
-              style={styles.botonEmpezarGrande}
+              style={[
+                styles.botonEmpezarGrande,
+                { flexDirection: "row", justifyContent: "center" },
+              ]}
               onPress={() => {
                 setRutinaActiva(true);
                 setTiempoGlobal(0);
@@ -822,8 +869,14 @@ export default function PantallaRutina() {
                 );
               }}
             >
+              <MaterialCommunityIcons
+                name="play"
+                size={20}
+                color={COLORES.textoBlanco}
+                style={{ marginRight: 8 }}
+              />
               <Text style={styles.textoBotonEmpezar}>
-                ▶ Empezar Entrenamiento
+                Empezar Entrenamiento
               </Text>
             </TouchableOpacity>
           )}
@@ -838,9 +891,17 @@ export default function PantallaRutina() {
                 style={styles.botonAgregarEjercicioFlotante}
                 onPress={() => setModalVisible(true)}
               >
-                <Text style={styles.textoBotonEjercicio}>
-                  + Añadir Ejercicio
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <MaterialCommunityIcons
+                    name="plus"
+                    size={18}
+                    color={COLORES.azulHevy}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={styles.textoBotonEjercicio}>
+                    Añadir Ejercicio
+                  </Text>
+                </View>
               </TouchableOpacity>
             }
             renderItem={({ item, index }) => {
@@ -859,11 +920,24 @@ export default function PantallaRutina() {
                       style={styles.contenedorNombreImagen}
                       onPress={() => setEjercicioDetalle(datosCompletos)}
                     >
-                      {urlMiniatura && (
+                      {urlMiniatura ? (
                         <Image
                           source={{ uri: urlMiniatura }}
                           style={styles.imagenMini}
                         />
+                      ) : (
+                        <View
+                          style={[
+                            styles.imagenMini,
+                            { justifyContent: "center", alignItems: "center" },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name="dumbbell"
+                            size={20}
+                            color={COLORES.grisOscuro}
+                          />
+                        </View>
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.textoTarjeta} numberOfLines={2}>
@@ -885,10 +959,19 @@ export default function PantallaRutina() {
                             setTempSegundos(descansoActual % 60);
                             setEjercicioEditandoDescanso(item.id);
                           }}
-                          style={styles.botonEditarDescanso}
+                          style={[
+                            styles.botonEditarDescanso,
+                            { flexDirection: "row", alignItems: "center" },
+                          ]}
                         >
+                          <MaterialCommunityIcons
+                            name="timer-outline"
+                            size={14}
+                            color={COLORES.grisClaro}
+                            style={{ marginRight: 4 }}
+                          />
                           <Text style={styles.textoEditarDescanso}>
-                            ⏱ Descanso: {formatearDescanso(descansoActual)}
+                            Descanso: {formatearDescanso(descansoActual)}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -898,7 +981,11 @@ export default function PantallaRutina() {
                       style={styles.botonOpcionesMenu}
                       onPress={() => setOpcionesEjercicioId(item.id)}
                     >
-                      <Text style={styles.textoOpcionesMenu}>⋮</Text>
+                      <MaterialCommunityIcons
+                        name="dots-vertical"
+                        size={24}
+                        color={COLORES.grisOscuro}
+                      />
                     </TouchableOpacity>
                   </View>
 
@@ -909,7 +996,12 @@ export default function PantallaRutina() {
                     </Text>
                     <Text style={styles.textoCabeceraSerie}>KG</Text>
                     <Text style={styles.textoCabeceraSerie}>REPS</Text>
-                    <Text style={styles.textoCabeceraSerieCheck}>✓</Text>
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={16}
+                      color={COLORES.grisOscuro}
+                      style={styles.textoCabeceraSerieCheck}
+                    />
                   </View>
 
                   {item.series.map((serie: any, idx: number) => {
@@ -979,9 +1071,9 @@ export default function PantallaRutina() {
                               {serie.completada && recordLogrado && (
                                 <Text style={{ fontSize: 16, marginRight: 5 }}>
                                   <MaterialCommunityIcons
-                                    name="trophy-award"
-                                    size={24}
-                                    color="yellow"
+                                    name="trophy"
+                                    size={20}
+                                    color="#FFD700"
                                   />
                                 </Text>
                               )}
@@ -993,7 +1085,11 @@ export default function PantallaRutina() {
                                 ]}
                                 onPress={() => toggleSerie(item.id, serie.id)}
                               >
-                                <Text style={styles.textoCheck}>✓</Text>
+                                <MaterialCommunityIcons
+                                  name="check"
+                                  size={16}
+                                  color={COLORES.textoBlanco}
+                                />
                               </TouchableOpacity>
                             </View>
                           ) : (
@@ -1098,14 +1194,11 @@ export default function PantallaRutina() {
                   ]}
                   onPress={togglePausaDescanso}
                 >
-                  <Text
-                    style={[
-                      styles.textoBtnPausar,
-                      !activo && { color: COLORES.azulHevy },
-                    ]}
-                  >
-                    {activo ? "⏸" : "▶️"}
-                  </Text>
+                  <MaterialCommunityIcons
+                    name={activo ? "pause" : "play"}
+                    size={20}
+                    color={!activo ? COLORES.azulHevy : COLORES.textoBlanco}
+                  />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1124,6 +1217,11 @@ export default function PantallaRutina() {
             </View>
           )}
 
+          {/* ======================================================== */}
+          {/* ======================= MODALES ========================== */}
+          {/* ======================================================== */}
+
+          {/* 1. MODAL DE OPCIONES DEL EJERCICIO */}
           <Modal
             animationType="fade"
             transparent={true}
@@ -1144,7 +1242,12 @@ export default function PantallaRutina() {
                     setModalReordenarVisible(true);
                   }}
                 >
-                  <Text style={styles.textoMenuIcono}>↕️</Text>
+                  <MaterialCommunityIcons
+                    name="swap-vertical"
+                    size={20}
+                    color={COLORES.textoBlanco}
+                    style={styles.textoMenuIcono}
+                  />
                   <Text style={styles.textoMenuOpcion}>
                     Reordenar Ejercicios
                   </Text>
@@ -1154,7 +1257,12 @@ export default function PantallaRutina() {
                   style={styles.botonMenuOpcion}
                   onPress={() => prepararReemplazo(opcionesEjercicioId!)}
                 >
-                  <Text style={styles.textoMenuIcono}>🔄</Text>
+                  <MaterialCommunityIcons
+                    name="swap-horizontal"
+                    size={20}
+                    color={COLORES.textoBlanco}
+                    style={styles.textoMenuIcono}
+                  />
                   <Text style={styles.textoMenuOpcion}>
                     Reemplazar Ejercicio
                   </Text>
@@ -1182,6 +1290,7 @@ export default function PantallaRutina() {
             </View>
           </Modal>
 
+          {/* 2. MODAL PARA REORDENAR EJERCICIOS */}
           <Modal
             animationType="slide"
             transparent={true}
@@ -1247,7 +1356,11 @@ export default function PantallaRutina() {
                                 style={styles.circuloRojoRemover}
                                 onPress={() => eliminarEjercicio(item.id)}
                               >
-                                <Text style={styles.textoMenos}>-</Text>
+                                <MaterialCommunityIcons
+                                  name="minus"
+                                  size={16}
+                                  color={COLORES.rojoPeligro}
+                                />
                               </TouchableOpacity>
                               {thumb ? (
                                 <Image
@@ -1258,9 +1371,19 @@ export default function PantallaRutina() {
                                 <View
                                   style={[
                                     styles.imagenMiniCatalogo,
-                                    { backgroundColor: COLORES.fondoInput },
+                                    {
+                                      backgroundColor: COLORES.fondoInput,
+                                      justifyContent: "center",
+                                      alignItems: "center",
+                                    },
                                   ]}
-                                />
+                                >
+                                  <MaterialCommunityIcons
+                                    name="dumbbell"
+                                    size={20}
+                                    color={COLORES.grisOscuro}
+                                  />
+                                </View>
                               )}
                               <Text
                                 style={[styles.textoEjercicioDB, { flex: 1 }]}
@@ -1270,7 +1393,12 @@ export default function PantallaRutina() {
                               </Text>
                             </View>
                             <TouchableOpacity onPressIn={drag}>
-                              <Text style={styles.iconoDrag}>≡</Text>
+                              <MaterialCommunityIcons
+                                name="menu"
+                                size={24}
+                                color={COLORES.grisClaro}
+                                style={{ paddingHorizontal: 10 }}
+                              />
                             </TouchableOpacity>
                           </TouchableOpacity>
                         </ScaleDecorator>
@@ -1282,291 +1410,699 @@ export default function PantallaRutina() {
             </GestureHandlerRootView>
           </Modal>
 
+          {/* 3. MODAL CATÁLOGO HEVY */}
           <Modal
             animationType="slide"
-            transparent={true}
+            transparent={false}
             visible={modalVisible}
             onRequestClose={() => {
               setModalVisible(false);
               setEjercicioAReemplazar(null);
             }}
           >
-            <View style={styles.modalContainer}>
-              <View style={styles.modalContenido}>
-                <View style={styles.modalCabecera}>
-                  <Text style={styles.modalTitulo}>
-                    {ejercicioAReemplazar ? "Reemplazar por..." : "Catálogo"}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setModalVisible(false);
-                      setEjercicioAReemplazar(null);
-                    }}
-                  >
-                    <Text style={styles.textoCerrar}>Cerrar</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.contenedorFiltros}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {PESTAÑAS_FILTRO.map((m) => (
-                      <TouchableOpacity
-                        key={m}
-                        style={[
-                          styles.botonFiltro,
-                          filtroActivo === m && styles.botonFiltroActivo,
-                        ]}
-                        onPress={() => setFiltroActivo(m)}
-                      >
-                        <Text
-                          style={
-                            filtroActivo === m
-                              ? styles.textoFiltroActivo
-                              : styles.textoFiltro
-                          }
-                        >
-                          {m}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
+            <View style={{ flex: 1, backgroundColor: "#000" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingTop: 50,
+                  paddingBottom: 15,
+                }}
+              >
                 <TouchableOpacity
-                  style={styles.botonLlamarCrear}
+                  onPress={() => {
+                    setModalVisible(false);
+                    setEjercicioAReemplazar(null);
+                  }}
+                >
+                  <Text style={{ color: "#3b82f6", fontSize: 16 }}>
+                    Cancelar
+                  </Text>
+                </TouchableOpacity>
+
+                <Text
+                  style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}
+                >
+                  {ejercicioAReemplazar
+                    ? "Reemplazar Ejercicio"
+                    : "Agregar Ejercicio"}
+                </Text>
+
+                <TouchableOpacity
                   onPress={() => {
                     setEjercicioEditandoId(null);
                     setNuevoNombreEjercicio("");
-                    setNuevoMusculoEjercicio("Piernas");
+                    setNuevoMusculoEjercicio("Pecho");
+                    setNuevoEquipamiento("Ninguno");
                     setNuevoMediaUrl("");
                     setNuevaDescripcion("");
                     setNuevosMusculosSecundarios([]);
-                    setModalCrearEjercicioVisible(true);
+                    setModalVisible(false);
+                    setTimeout(() => setModalCrearEjercicioVisible(true), 300);
                   }}
                 >
-                  <Text style={styles.textoLlamarCrear}>
-                    + Crear Ejercicio Nuevo
-                  </Text>
+                  <Text style={{ color: "#3b82f6", fontSize: 16 }}>Crear</Text>
                 </TouchableOpacity>
-                <FlatList
-                  data={ejerciciosFiltrados}
-                  keyExtractor={(e) => e.id}
-                  renderItem={({ item }) => {
-                    const miniaturaCatalogo = item.imagenUrl || item.gifUrl;
-                    return (
-                      <View style={styles.itemEjercicioDB}>
-                        <TouchableOpacity
+              </View>
+
+              <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
+                <View
+                  style={{
+                    backgroundColor: "#1c1c1e",
+                    borderRadius: 10,
+                    paddingHorizontal: 15,
+                    paddingVertical: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="magnify"
+                    size={20}
+                    color="#666"
+                    style={{ marginRight: 10 }}
+                  />
+                  <TextInput
+                    placeholder="Buscar ejercicio"
+                    placeholderTextColor="#666"
+                    style={{ color: "#fff", fontSize: 16, flex: 1 }}
+                    value={busquedaCatalog}
+                    onChangeText={setBusquedaCatalog}
+                  />
+                </View>
+              </View>
+
+              {/* FILTROS HORIZONTALES (Mis Ejercicios / Equipamiento / Músculo) */}
+              <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10 }}
+                >
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: verMisEjercicios
+                        ? COLORES.azulHevy
+                        : "#1c1c1e",
+                      paddingVertical: 10,
+                      paddingHorizontal: 15,
+                      borderRadius: 10,
+                    }}
+                    onPress={() => setVerMisEjercicios(!verMisEjercicios)}
+                  >
+                    <Text
+                      style={{
+                        color: verMisEjercicios ? "#fff" : COLORES.azulHevy,
+                        fontSize: 14,
+                      }}
+                    >
+                      Mis Ejercicios
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: "#1c1c1e",
+                      paddingVertical: 10,
+                      paddingHorizontal: 15,
+                      borderRadius: 10,
+                    }}
+                    onPress={() => {
+                      setBusquedaSubModal("");
+                      setTipoSelectorAbierto("filtroEquipoCat");
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          filtroEquipamientoCat === "Todo Equipamiento"
+                            ? "#fff"
+                            : COLORES.azulHevy,
+                        fontSize: 14,
+                      }}
+                    >
+                      {filtroEquipamientoCat}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: "#1c1c1e",
+                      paddingVertical: 10,
+                      paddingHorizontal: 15,
+                      borderRadius: 10,
+                    }}
+                    onPress={() => {
+                      setBusquedaSubModal("");
+                      setTipoSelectorAbierto("filtroMusculoCat");
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          filtroMusculoCat === "Todos Músculos"
+                            ? "#fff"
+                            : COLORES.azulHevy,
+                        fontSize: 14,
+                      }}
+                    >
+                      {filtroMusculoCat}
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+
+              <Text
+                style={{
+                  color: "#666",
+                  fontSize: 14,
+                  paddingHorizontal: 20,
+                  marginBottom: 15,
+                }}
+              >
+                Catálogo
+              </Text>
+
+              <FlatList
+                data={ejerciciosFiltrados}
+                keyExtractor={(e) => e.id}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                  paddingBottom: 50,
+                }}
+                ListEmptyComponent={
+                  <Text
+                    style={{
+                      color: "#666",
+                      textAlign: "center",
+                      marginTop: 20,
+                    }}
+                  >
+                    No se encontraron ejercicios
+                  </Text>
+                }
+                renderItem={({ item }) => {
+                  const miniaturaCatalogo = item.imagenUrl || item.gifUrl;
+                  return (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          flex: 1,
+                        }}
+                        onPress={() => agregarEjercicio(item)}
+                      >
+                        <View
                           style={{
-                            flex: 1,
-                            flexDirection: "row",
-                            alignItems: "center",
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            backgroundColor: "#1c1c1e",
+                            marginRight: 15,
+                            overflow: "hidden",
                           }}
-                          onPress={() => agregarEjercicio(item)}
                         >
-                          {miniaturaCatalogo && (
+                          {miniaturaCatalogo ? (
                             <Image
                               source={{ uri: miniaturaCatalogo }}
-                              style={styles.imagenMiniCatalogo}
+                              style={{ width: "100%", height: "100%" }}
                             />
-                          )}
-                          <View>
-                            <Text style={styles.textoEjercicioDB}>
-                              {item.nombre}
-                            </Text>
-                            <Text style={styles.textoMusculoDB}>
-                              {item.musculo} {item.id.includes("custom") && "★"}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                        {item.id.includes("custom") && (
-                          <View style={{ flexDirection: "row" }}>
-                            <TouchableOpacity
-                              style={styles.botonTachoDB}
-                              onPress={() => {
-                                setEjercicioEditandoId(item.id);
-                                setNuevoNombreEjercicio(item.nombre);
-                                setNuevoMusculoEjercicio(item.musculo);
-                                setNuevoMediaUrl(item.imagenUrl || "");
-                                setNuevaDescripcion(item.descripcion || "");
-                                const secundariosPrevios =
-                                  item.musculosTrabajados
-                                    ? item.musculosTrabajados.slice(1)
-                                    : [];
-                                setNuevosMusculosSecundarios(
-                                  secundariosPrevios,
-                                );
-                                setModalCrearEjercicioVisible(true);
+                          ) : (
+                            <View
+                              style={{
+                                flex: 1,
+                                justifyContent: "center",
+                                alignItems: "center",
                               }}
                             >
-                              <Text
-                                style={{
-                                  color: COLORES.azulHevy,
-                                  fontWeight: "bold",
-                                  fontSize: 12,
-                                }}
-                              >
-                                EDITAR
-                              </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.botonTachoDB}
-                              onPress={() => eliminarEjercicioDeDB(item.id)}
+                              <MaterialCommunityIcons
+                                name="dumbbell"
+                                size={24}
+                                color="#666"
+                              />
+                            </View>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              color: "#fff",
+                              fontSize: 16,
+                              marginBottom: 4,
+                            }}
+                          >
+                            {item.nombre}
+                          </Text>
+                          <Text style={{ color: "#666", fontSize: 14 }}>
+                            {item.musculo}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {item.id.includes("custom") && (
+                        <View style={{ flexDirection: "row" }}>
+                          <TouchableOpacity
+                            style={styles.botonTachoDB}
+                            onPress={() => {
+                              setEjercicioEditandoId(item.id);
+                              setNuevoNombreEjercicio(item.nombre);
+                              setNuevoMusculoEjercicio(item.musculo);
+                              setNuevoEquipamiento(
+                                item.equipamiento || "Ninguno",
+                              );
+                              setNuevoMediaUrl(item.imagenUrl || "");
+                              setNuevaDescripcion(item.descripcion || "");
+                              const secundariosPrevios = item.musculosTrabajados
+                                ? item.musculosTrabajados.slice(1)
+                                : [];
+                              setNuevosMusculosSecundarios(secundariosPrevios);
+                              setModalCrearEjercicioVisible(true);
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: COLORES.azulHevy,
+                                fontWeight: "bold",
+                                fontSize: 12,
+                              }}
                             >
-                              <Text
-                                style={{
-                                  color: COLORES.rojoPeligro,
-                                  fontWeight: "bold",
-                                  fontSize: 12,
-                                }}
-                              >
-                                ELIMINAR
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  }}
-                />
-              </View>
+                              EDITAR
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.botonTachoDB}
+                            onPress={() => eliminarEjercicioDeDB(item.id)}
+                          >
+                            <Text
+                              style={{
+                                color: COLORES.rojoPeligro,
+                                fontWeight: "bold",
+                                fontSize: 12,
+                              }}
+                            >
+                              ELIMINAR
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                }}
+              />
             </View>
           </Modal>
 
+          {/* 4. MODAL CREAR EJERCICIO HEVY */}
           <Modal
-            animationType="fade"
-            transparent={true}
+            animationType="slide"
+            transparent={false}
             visible={modalCrearEjercicioVisible}
             onRequestClose={() => setModalCrearEjercicioVisible(false)}
           >
-            <View style={styles.modalOscuro}>
-              <View style={styles.cajaCrearEjercicioScroll}>
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  bounces={false}
+            <View style={{ flex: 1, backgroundColor: "#000" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingTop: 50,
+                  paddingBottom: 15,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#111",
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setModalCrearEjercicioVisible(false)}
+                  style={{ padding: 10, marginLeft: -10 }}
                 >
-                  <Text style={styles.tituloCajaDescanso}>
-                    {ejercicioEditandoId
-                      ? "Editar Ejercicio"
-                      : "Crear Nuevo Ejercicio"}
+                  <MaterialCommunityIcons
+                    name="arrow-left"
+                    size={24}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+                <Text
+                  style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}
+                >
+                  {ejercicioEditandoId ? "Editar Ejercicio" : "Crear Ejercicio"}
+                </Text>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: COLORES.azulHevy,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                  }}
+                  onPress={crearEjercicioPersonalizado}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                    Guardar
                   </Text>
-                  <Text style={styles.labelFormulario}>
-                    Nombre (Obligatorio)
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <TouchableOpacity
+                  style={{
+                    alignItems: "center",
+                    marginTop: 30,
+                    marginBottom: 30,
+                  }}
+                  onPress={seleccionarMedia}
+                >
+                  <View
+                    style={{
+                      width: 100,
+                      height: 100,
+                      borderRadius: 50,
+                      backgroundColor: "#1c1c1e",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      overflow: "hidden",
+                      borderWidth: 1,
+                      borderColor: "#333",
+                    }}
+                  >
+                    {nuevoMediaUrl ? (
+                      <Image
+                        source={{ uri: nuevoMediaUrl }}
+                        style={{ width: "100%", height: "100%" }}
+                      />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name="camera-plus"
+                        size={30}
+                        color="#fff"
+                      />
+                    )}
+                  </View>
+                  <Text
+                    style={{
+                      color: COLORES.azulHevy,
+                      fontSize: 14,
+                      marginTop: 15,
+                    }}
+                  >
+                    Añadir recurso
                   </Text>
+                </TouchableOpacity>
+
+                <View style={{ paddingHorizontal: 20, marginBottom: 30 }}>
                   <TextInput
-                    style={styles.inputFormulario}
-                    placeholder="Ej: Hip Thrust"
-                    placeholderTextColor="#888"
+                    style={{
+                      color: "#fff",
+                      fontSize: 20,
+                      fontWeight: "bold",
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#333",
+                      paddingBottom: 10,
+                    }}
+                    placeholder="Nombre de Ejercicio"
+                    placeholderTextColor="#666"
                     value={nuevoNombreEjercicio}
                     onChangeText={setNuevoNombreEjercicio}
                   />
-                  <Text style={styles.labelFormulario}>
-                    Imagen o GIF (Desde tu galería)
-                  </Text>
+                </View>
+
+                <View style={{ paddingHorizontal: 20 }}>
                   <TouchableOpacity
-                    style={[styles.botonSubirFoto, { marginBottom: 15 }]}
-                    onPress={seleccionarMedia}
+                    style={{
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#111",
+                      paddingVertical: 15,
+                    }}
+                    onPress={() => setTipoSelectorAbierto("equipamiento")}
                   >
-                    <Text style={styles.textoSubirFoto}>
-                      {nuevoMediaUrl
-                        ? "✅ Archivo seleccionado"
-                        : "📷/🎬 Subir Archivo"}
+                    <Text
+                      style={{ color: "#fff", fontSize: 16, marginBottom: 5 }}
+                    >
+                      Equipamiento
                     </Text>
-                  </TouchableOpacity>
-                  <Text style={styles.labelFormulario}>
-                    Descripción / Tips (Opcional)
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.inputFormulario,
-                      { height: 80, textAlignVertical: "top" },
-                    ]}
-                    multiline={true}
-                    placeholder="Ej: Mantener la mirada al frente..."
-                    placeholderTextColor="#888"
-                    value={nuevaDescripcion}
-                    onChangeText={setNuevaDescripcion}
-                  />
-                  <Text style={styles.labelFormulario}>
-                    Músculos Secundarios (Seleccioná varios)
-                  </Text>
-                  <View style={styles.contenedorFiltrosCreacion}>
-                    {MUSCULOS_CREACION.map((m) => {
-                      if (m === nuevoMusculoEjercicio) return null;
-                      const seleccionado =
-                        nuevosMusculosSecundarios.includes(m);
-                      return (
-                        <TouchableOpacity
-                          key={`secundario-${m}`}
-                          style={[
-                            styles.botonFiltroCreacion,
-                            seleccionado && styles.botonFiltroActivo,
-                          ]}
-                          onPress={() => toggleMusculoSecundario(m)}
-                        >
-                          <Text
-                            style={
-                              seleccionado
-                                ? styles.textoFiltroActivo
-                                : styles.textoFiltro
-                            }
-                          >
-                            {m}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  <Text
-                    style={[
-                      styles.labelFormulario,
-                      { marginTop: 10, marginBottom: 10 },
-                    ]}
-                  >
-                    Músculo Principal (Categoría):
-                  </Text>
-                  <View style={styles.contenedorFiltrosCreacion}>
-                    {MUSCULOS_CREACION.map((m) => (
-                      <TouchableOpacity
-                        key={m}
-                        style={[
-                          styles.botonFiltroCreacion,
-                          nuevoMusculoEjercicio === m &&
-                            styles.botonFiltroActivo,
-                        ]}
-                        onPress={() => setNuevoMusculoEjercicio(m)}
-                      >
-                        <Text
-                          style={
-                            nuevoMusculoEjercicio === m
-                              ? styles.textoFiltroActivo
-                              : styles.textoFiltro
-                          }
-                        >
-                          {m}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <View style={styles.filaBotonesCrear}>
-                    <TouchableOpacity
-                      style={styles.botonCancelarCrear}
-                      onPress={() => {
-                        setModalCrearEjercicioVisible(false);
-                        setEjercicioEditandoId(null);
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
                       }}
                     >
-                      <Text style={styles.textoCancelarCrear}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.botonGuardarCrear}
-                      onPress={crearEjercicioPersonalizado}
+                      <Text
+                        style={{
+                          color:
+                            nuevoEquipamiento === "Ninguno"
+                              ? COLORES.azulHevy
+                              : "#fff",
+                          fontSize: 14,
+                        }}
+                      >
+                        {nuevoEquipamiento === "Ninguno"
+                          ? "Seleccionar"
+                          : nuevoEquipamiento}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={20}
+                        color="#666"
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#111",
+                      paddingVertical: 15,
+                    }}
+                    onPress={() => setTipoSelectorAbierto("primario")}
+                  >
+                    <Text
+                      style={{ color: "#fff", fontSize: 16, marginBottom: 5 }}
                     >
-                      <Text style={styles.textoOkDescanso}>Guardar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </ScrollView>
-              </View>
+                      Grupo Muscular Primario
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 14 }}>
+                        {nuevoMusculoEjercicio}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={20}
+                        color="#666"
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#111",
+                      paddingVertical: 15,
+                    }}
+                    onPress={() => setTipoSelectorAbierto("secundario")}
+                  >
+                    <Text
+                      style={{ color: "#fff", fontSize: 16, marginBottom: 5 }}
+                    >
+                      Otros músculos
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color:
+                            nuevosMusculosSecundarios.length === 0
+                              ? COLORES.azulHevy
+                              : "#fff",
+                          fontSize: 14,
+                        }}
+                      >
+                        {nuevosMusculosSecundarios.length === 0
+                          ? "Seleccionar (opcional)"
+                          : nuevosMusculosSecundarios.join(", ")}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={20}
+                        color="#666"
+                      />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </Modal>
 
+          {/* 5. SUB-MODAL DESLIZABLE (EQUIPAMIENTO / MUSCULOS / FILTROS) */}
+          <Modal
+            animationType="slide"
+            transparent={false}
+            visible={!!tipoSelectorAbierto}
+            onRequestClose={() => setTipoSelectorAbierto(null)}
+          >
+            <View style={{ flex: 1, backgroundColor: "#000" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingTop: 50,
+                  paddingBottom: 15,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#111",
+                }}
+              >
+                <TouchableOpacity onPress={() => setTipoSelectorAbierto(null)}>
+                  <Text style={{ color: COLORES.azulHevy, fontSize: 16 }}>
+                    Cancelar
+                  </Text>
+                </TouchableOpacity>
+                <Text
+                  style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}
+                >
+                  {tipoSelectorAbierto === "equipamiento" ||
+                  tipoSelectorAbierto === "filtroEquipoCat"
+                    ? "Equipamiento"
+                    : tipoSelectorAbierto === "primario" ||
+                        tipoSelectorAbierto === "filtroMusculoCat"
+                      ? "Grupo Muscular"
+                      : "Músculos Secundarios"}
+                </Text>
+                <TouchableOpacity onPress={() => setTipoSelectorAbierto(null)}>
+                  <Text
+                    style={{
+                      color: COLORES.azulHevy,
+                      fontSize: 16,
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Listo
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View
+                style={{
+                  paddingHorizontal: 20,
+                  marginTop: 15,
+                  marginBottom: 15,
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: "#1c1c1e",
+                    borderRadius: 10,
+                    paddingHorizontal: 15,
+                    paddingVertical: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="magnify"
+                    size={20}
+                    color="#666"
+                    style={{ marginRight: 10 }}
+                  />
+                  <TextInput
+                    placeholder="Buscar"
+                    placeholderTextColor="#666"
+                    style={{ color: "#fff", flex: 1 }}
+                    value={busquedaSubModal}
+                    onChangeText={setBusquedaSubModal}
+                  />
+                </View>
+              </View>
+
+              <FlatList
+                data={(tipoSelectorAbierto === "equipamiento" ||
+                tipoSelectorAbierto === "filtroEquipoCat"
+                  ? EQUIPAMIENTO
+                  : GRUPOS_MUSCULARES
+                ).filter((item) =>
+                  item.toLowerCase().includes(busquedaSubModal.toLowerCase()),
+                )}
+                keyExtractor={(item) => item}
+                contentContainerStyle={{ paddingBottom: 50 }}
+                renderItem={({ item }) => {
+                  let estaSeleccionado = false;
+                  if (tipoSelectorAbierto === "equipamiento")
+                    estaSeleccionado = item === nuevoEquipamiento;
+                  if (tipoSelectorAbierto === "primario")
+                    estaSeleccionado = item === nuevoMusculoEjercicio;
+                  if (tipoSelectorAbierto === "secundario")
+                    estaSeleccionado = nuevosMusculosSecundarios.includes(item);
+                  if (tipoSelectorAbierto === "filtroEquipoCat")
+                    estaSeleccionado = item === filtroEquipamientoCat;
+                  if (tipoSelectorAbierto === "filtroMusculoCat")
+                    estaSeleccionado = item === filtroMusculoCat;
+
+                  return (
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingVertical: 18,
+                        paddingHorizontal: 20,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "#111",
+                      }}
+                      onPress={() => {
+                        if (tipoSelectorAbierto === "equipamiento") {
+                          setNuevoEquipamiento(item);
+                          setTipoSelectorAbierto(null);
+                        } else if (tipoSelectorAbierto === "primario") {
+                          setNuevoMusculoEjercicio(item);
+                          setTipoSelectorAbierto(null);
+                        } else if (tipoSelectorAbierto === "secundario") {
+                          toggleMusculoSecundario(item);
+                        } else if (tipoSelectorAbierto === "filtroEquipoCat") {
+                          setFiltroEquipamientoCat(item);
+                          setTipoSelectorAbierto(null);
+                        } else if (tipoSelectorAbierto === "filtroMusculoCat") {
+                          setFiltroMusculoCat(item);
+                          setTipoSelectorAbierto(null);
+                        }
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 16 }}>
+                        {item}
+                      </Text>
+                      {estaSeleccionado && (
+                        <MaterialCommunityIcons
+                          name="check"
+                          size={24}
+                          color={COLORES.azulHevy}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          </Modal>
+
+          {/* 6. MODAL DETALLE DE EJERCICIO (FOTO/GIF) */}
           <Modal
             animationType="fade"
             transparent={true}
@@ -1625,6 +2161,7 @@ export default function PantallaRutina() {
             </View>
           </Modal>
 
+          {/* 7. MODAL EDITAR DESCANSO */}
           <Modal
             animationType="fade"
             transparent={true}
@@ -1646,14 +2183,22 @@ export default function PantallaRutina() {
                           setTempMinutos(Math.max(0, tempMinutos - 1))
                         }
                       >
-                        <Text style={styles.textoBtnSelector}>-</Text>
+                        <MaterialCommunityIcons
+                          name="minus"
+                          size={20}
+                          color={COLORES.textoBlanco}
+                        />
                       </TouchableOpacity>
                       <Text style={styles.numeroSelector}>{tempMinutos}</Text>
                       <TouchableOpacity
                         style={styles.botonSelector}
                         onPress={() => setTempMinutos(tempMinutos + 1)}
                       >
-                        <Text style={styles.textoBtnSelector}>+</Text>
+                        <MaterialCommunityIcons
+                          name="plus"
+                          size={20}
+                          color={COLORES.textoBlanco}
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1668,7 +2213,11 @@ export default function PantallaRutina() {
                           )
                         }
                       >
-                        <Text style={styles.textoBtnSelector}>-</Text>
+                        <MaterialCommunityIcons
+                          name="minus"
+                          size={20}
+                          color={COLORES.textoBlanco}
+                        />
                       </TouchableOpacity>
                       <Text style={styles.numeroSelector}>{tempSegundos}</Text>
                       <TouchableOpacity
@@ -1679,7 +2228,11 @@ export default function PantallaRutina() {
                           )
                         }
                       >
-                        <Text style={styles.textoBtnSelector}>+</Text>
+                        <MaterialCommunityIcons
+                          name="plus"
+                          size={20}
+                          color={COLORES.textoBlanco}
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1694,7 +2247,7 @@ export default function PantallaRutina() {
             </View>
           </Modal>
 
-          {/* --- PANTALLA COMPLETA DE GUARDADO --- */}
+          {/* 8. PANTALLA DE RESUMEN (GUARDAR) */}
           <Modal
             animationType="slide"
             transparent={false}
@@ -1705,7 +2258,6 @@ export default function PantallaRutina() {
             }}
           >
             <View style={styles.modalPantallaCompleta}>
-              {/* HEADER CON ATRÁS ROJO */}
               <View style={styles.headerGuardar}>
                 <TouchableOpacity
                   onPress={() => {
@@ -1734,19 +2286,162 @@ export default function PantallaRutina() {
                 </TouchableOpacity>
               </View>
 
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                <View style={{ padding: 20 }}>
+                  <Text style={styles.nombreRutinaGuardar}>{rutina}</Text>
+
+                  <View style={styles.filaStatsGuardar}>
+                    <View style={styles.cajaStatGuardar}>
+                      <Text style={styles.labelStatGuardar}>Duración</Text>
+                      <Text style={styles.valorStatAzul}>
+                        {formatearTiempoGlobal(tiempoGlobal)}
+                      </Text>
+                    </View>
+                    <View style={styles.cajaStatGuardar}>
+                      <Text style={styles.labelStatGuardar}>Volumen</Text>
+                      <Text style={styles.valorStatGuardar}>
+                        {calcularVolumen()} kg
+                      </Text>
+                    </View>
+                    <View style={styles.cajaStatGuardar}>
+                      <Text style={styles.labelStatGuardar}>Series</Text>
+                      <Text style={styles.valorStatGuardar}>
+                        {calcularSeries()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.separador} />
+
+                  <Text style={styles.valorStatAzul}>
+                    {new Date().toLocaleDateString("es-AR", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+
+                  {recordsLogrados > 0 && (
+                    <View
+                      style={[
+                        styles.cajaRecordsGuardar,
+                        { alignSelf: "flex-start" },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="trophy"
+                        size={20}
+                        color="#FFD700"
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={styles.textoRecordG}>
+                        ¡Rompiste {recordsLogrados} récord
+                        {recordsLogrados > 1 ? "s" : ""} personal
+                        {recordsLogrados > 1 ? "es" : ""} hoy!
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.separador} />
+
+                  <Text style={styles.labelStatGuardar}>Descripción</Text>
+                  <TextInput
+                    style={styles.inputNotasEntrenamiento}
+                    placeholder="¿Cómo ha ido tu entrenamiento? Deja algunas notas aquí..."
+                    placeholderTextColor="#666"
+                    multiline={true}
+                    value={notasEntreno}
+                    onChangeText={setNotasEntreno}
+                  />
+
+                  <View style={styles.separador} />
+
+                  <TouchableOpacity
+                    style={styles.botonCompartirTexto}
+                    onPress={() => setModalCompartirVisible(true)}
+                  >
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <MaterialCommunityIcons
+                        name="camera-outline"
+                        size={18}
+                        color={COLORES.azulHevy}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.textoCompartirTexto}>
+                        Crear Foto para Historia
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.botonDescartar}
+                    onPress={descartarEntrenamiento}
+                  >
+                    <Text style={styles.textoDescartar}>Descartar Entreno</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </Modal>
+
+          {/* 9. PANTALLA COMPLETA DE EDICIÓN DE PÓSTER (SE ABRE DESDE LA DE GUARDAR) */}
+          <Modal
+            animationType="slide"
+            transparent={false}
+            visible={modalCompartirVisible}
+            onRequestClose={() => setModalCompartirVisible(false)}
+          >
+            <View style={styles.modalPantallaCompleta}>
+              <View style={styles.headerGuardar}>
+                <TouchableOpacity
+                  onPress={() => setModalCompartirVisible(false)}
+                  style={{ padding: 10, marginLeft: -10 }}
+                >
+                  <Text
+                    style={{
+                      color: COLORES.rojoPeligro,
+                      fontWeight: "bold",
+                      fontSize: 14,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Atrás
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.tituloGuardar}>Compartir Logro</Text>
+                <TouchableOpacity
+                  style={styles.botonGuardarTop}
+                  onPress={guardarEnGaleria}
+                >
+                  <Text style={styles.textoBotonGuardarTop}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 bounces={false}
                 scrollEnabled={scrollHabilitado}
               >
-                {/* --- CONTROLES DE FOTO Y TAMAÑO --- */}
                 <View style={styles.filaControlesFoto}>
                   <TouchableOpacity
-                    style={styles.botonControlPeque}
+                    style={[
+                      styles.botonControlPeque,
+                      { flexDirection: "row", alignItems: "center" },
+                    ]}
                     onPress={elegirFondoFacha}
                   >
+                    <MaterialCommunityIcons
+                      name={fondoFacha ? "image-edit-outline" : "image-plus"}
+                      size={16}
+                      color={COLORES.grisClaro}
+                      style={{ marginRight: 6 }}
+                    />
                     <Text style={styles.textoControlPeque}>
-                      {fondoFacha ? "🖼️ Cambiar Fondo" : "🖼️ Poner Fondo"}
+                      {fondoFacha ? "Cambiar Fondo" : "Poner Fondo"}
                     </Text>
                   </TouchableOpacity>
 
@@ -1771,7 +2466,6 @@ export default function PantallaRutina() {
                   </View>
                 </View>
 
-                {/* --- ÁREA DE LA FOTO GIGANTE ACHICADA VISUALMENTE PARA PREVIEW --- */}
                 <View
                   style={{
                     width: anchoPantalla,
@@ -1780,11 +2474,10 @@ export default function PantallaRutina() {
                     marginTop: compensacionMargen,
                     marginBottom: compensacionMargen,
                     alignSelf: "center",
-                    borderRadius: 24, // Para que vos lo veas redondo en el preview
-                    overflow: "hidden", // Corta las esquinas
+                    borderRadius: 24,
+                    overflow: "hidden",
                   }}
                 >
-                  {/* Este componente captura la resolucion ORIGINAL 100% de la pantalla (1080x1920 aprox) */}
                   <ViewShot
                     ref={viewShotRef}
                     options={{ format: "png", quality: 1.0 }}
@@ -1803,13 +2496,12 @@ export default function PantallaRutina() {
                         resizeMode: "cover",
                       }}
                     >
-                      {/* TEXTOS ANIMADOS (Mover con el dedo) */}
                       <Animated.View
                         {...panResponder.panHandlers}
                         style={[
                           pan.getLayout(),
                           {
-                            transform: [{ scale: escalaStats }], // Usamos los botones para cambiar el tamaño
+                            transform: [{ scale: escalaStats }],
                             alignItems: "center",
                             padding: 20,
                             width: "100%",
@@ -1897,7 +2589,12 @@ export default function PantallaRutina() {
                               },
                             ]}
                           >
-                            <Text style={styles.iconoRecordG}>🏆</Text>
+                            <MaterialCommunityIcons
+                              name="trophy"
+                              size={20}
+                              color="#FFD700"
+                              style={{ marginRight: 8 }}
+                            />
                             <Text style={styles.textoRecordG}>
                               ¡Rompiste {recordsLogrados} récord
                               {recordsLogrados > 1 ? "s" : ""} personal
@@ -1908,36 +2605,6 @@ export default function PantallaRutina() {
                       </Animated.View>
                     </ImageBackground>
                   </ViewShot>
-                </View>
-
-                {/* --- NOTAS Y EXPORTAR --- */}
-                <View style={{ padding: 20, paddingBottom: 50 }}>
-                  <Text style={styles.labelStatGuardar}>Descripción</Text>
-                  <TextInput
-                    style={styles.inputNotasEntrenamiento}
-                    placeholder="¿Cómo ha ido tu entrenamiento? Deja algunas notas aquí..."
-                    placeholderTextColor="#666"
-                    multiline={true}
-                    value={notasEntreno}
-                    onChangeText={setNotasEntreno}
-                  />
-                  <View style={styles.separador} />
-
-                  <TouchableOpacity
-                    style={styles.botonCompartirTexto}
-                    onPress={guardarEnGaleria}
-                  >
-                    <Text style={styles.textoCompartirTexto}>
-                      Guardar Imagen en Galería 💾
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.botonDescartar}
-                    onPress={descartarEntrenamiento}
-                  >
-                    <Text style={styles.textoDescartar}>Descartar Entreno</Text>
-                  </TouchableOpacity>
                 </View>
               </ScrollView>
             </View>

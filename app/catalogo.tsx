@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useRouter } from "expo-router";
@@ -15,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { COLORES } from "../colores";
-import { EJERCICIOS_DB, MUSCULOS_CREACION } from "../ejercicios";
+import { EJERCICIOS_DB, EQUIPAMIENTO, GRUPOS_MUSCULARES } from "../ejercicios";
 
 export default function PantallaCatalogo() {
   const router = useRouter();
@@ -23,19 +24,39 @@ export default function PantallaCatalogo() {
     any[]
   >([]);
 
-  // Estados para el formulario de edición/creación
+  // --- ESTADOS PARA BÚSQUEDA Y FILTROS ---
+  const [busquedaCatalog, setBusquedaCatalog] = useState("");
+  const [filtroEquipamientoCat, setFiltroEquipamientoCat] =
+    useState("Todo Equipamiento");
+  const [filtroMusculoCat, setFiltroMusculoCat] = useState("Todos Músculos");
+  const [verMisEjercicios, setVerMisEjercicios] = useState(false);
+
+  // --- ESTADOS PARA EL FORMULARIO DE CREAR/EDITAR ---
   const [modalCrearEjercicioVisible, setModalCrearEjercicioVisible] =
     useState(false);
   const [ejercicioEditandoId, setEjercicioEditandoId] = useState<string | null>(
     null,
   );
+
   const [nuevoNombreEjercicio, setNuevoNombreEjercicio] = useState("");
-  const [nuevoMusculoEjercicio, setNuevoMusculoEjercicio] = useState("Piernas");
+  const [nuevoEquipamiento, setNuevoEquipamiento] = useState("Ninguno");
+  const [nuevoMusculoEjercicio, setNuevoMusculoEjercicio] = useState("Pecho");
   const [nuevoMediaUrl, setNuevoMediaUrl] = useState("");
   const [nuevaDescripcion, setNuevaDescripcion] = useState("");
   const [nuevosMusculosSecundarios, setNuevosMusculosSecundarios] = useState<
     string[]
   >([]);
+
+  // --- ESTADOS PARA LOS SUB-MODALES DESLIZABLES ---
+  const [tipoSelectorAbierto, setTipoSelectorAbierto] = useState<
+    | "equipamiento"
+    | "primario"
+    | "secundario"
+    | "filtroEquipoCat"
+    | "filtroMusculoCat"
+    | null
+  >(null);
+  const [busquedaSubModal, setBusquedaSubModal] = useState("");
 
   useEffect(() => {
     cargarEjerciciosPersonalizados();
@@ -91,6 +112,7 @@ export default function PantallaCatalogo() {
     const nuevoEj = {
       id: ejercicioEditandoId ? ejercicioEditandoId : `custom_${Date.now()}`,
       nombre: nuevoNombreEjercicio.trim(),
+      equipamiento: nuevoEquipamiento,
       musculo: nuevoMusculoEjercicio,
       imagenUrl: nuevoMediaUrl,
       gifUrl: "",
@@ -151,6 +173,7 @@ export default function PantallaCatalogo() {
     setEjercicioEditandoId(item.id);
     setNuevoNombreEjercicio(item.nombre);
     setNuevoMusculoEjercicio(item.musculo);
+    setNuevoEquipamiento(item.equipamiento || "Ninguno");
     setNuevoMediaUrl(item.imagenUrl || "");
     setNuevaDescripcion(item.descripcion || "");
     const secundariosPrevios = item.musculosTrabajados
@@ -160,10 +183,31 @@ export default function PantallaCatalogo() {
     setModalCrearEjercicioVisible(true);
   };
 
+  // --- LÓGICA DE FILTRADO EN TIEMPO REAL ---
   const TODOS_LOS_EJERCICIOS = [
     ...EJERCICIOS_DB,
     ...ejerciciosPersonalizados,
   ].sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  const ejerciciosFiltrados = TODOS_LOS_EJERCICIOS.filter((e) => {
+    const coincideBusqueda = e.nombre
+      .toLowerCase()
+      .includes(busquedaCatalog.toLowerCase());
+    const coincideMusculo =
+      filtroMusculoCat === "Todos Músculos" ||
+      e.musculo === filtroMusculoCat ||
+      (e.musculosTrabajados && e.musculosTrabajados.includes(filtroMusculoCat));
+    const coincideEquipo =
+      filtroEquipamientoCat === "Todo Equipamiento" ||
+      e.equipamiento === filtroEquipamientoCat;
+
+    // Si el botón de "Mis Ejercicios" está activo, solo muestra los que tienen "custom" en el ID
+    const coincideCustom = verMisEjercicios ? e.id.includes("custom") : true;
+
+    return (
+      coincideBusqueda && coincideMusculo && coincideEquipo && coincideCustom
+    );
+  });
 
   return (
     <View style={styles.container}>
@@ -181,37 +225,168 @@ export default function PantallaCatalogo() {
           onPress={() => {
             setEjercicioEditandoId(null);
             setNuevoNombreEjercicio("");
-            setNuevoMusculoEjercicio("Piernas");
+            setNuevoEquipamiento("Ninguno");
+            setNuevoMusculoEjercicio("Pecho");
             setNuevoMediaUrl("");
             setNuevaDescripcion("");
             setNuevosMusculosSecundarios([]);
             setModalCrearEjercicioVisible(true);
           }}
         >
-          <Text style={styles.textoCrearHeader}>+</Text>
+          <MaterialCommunityIcons
+            name="plus"
+            size={28}
+            color={COLORES.azulHevy}
+          />
         </TouchableOpacity>
       </View>
 
+      {/* --- BARRA DE BÚSQUEDA --- */}
+      <View style={{ paddingHorizontal: 20, marginBottom: 15 }}>
+        <View
+          style={{
+            backgroundColor: "#1c1c1e",
+            borderRadius: 10,
+            paddingHorizontal: 15,
+            paddingVertical: 12,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <MaterialCommunityIcons
+            name="magnify"
+            size={20}
+            color="#666"
+            style={{ marginRight: 10 }}
+          />
+          <TextInput
+            placeholder="Buscar ejercicio"
+            placeholderTextColor="#666"
+            style={{ color: "#fff", fontSize: 16, flex: 1 }}
+            value={busquedaCatalog}
+            onChangeText={setBusquedaCatalog}
+          />
+        </View>
+      </View>
+
+      {/* --- FILTROS HORIZONTALES (Mis Ejercicios / Equipamiento / Músculo) --- */}
+      <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10 }}
+        >
+          <TouchableOpacity
+            style={{
+              backgroundColor: verMisEjercicios ? COLORES.azulHevy : "#1c1c1e",
+              paddingVertical: 10,
+              paddingHorizontal: 15,
+              borderRadius: 10,
+            }}
+            onPress={() => setVerMisEjercicios(!verMisEjercicios)}
+          >
+            <Text
+              style={{
+                color: verMisEjercicios ? "#fff" : COLORES.azulHevy,
+                fontSize: 14,
+              }}
+            >
+              Mis Ejercicios
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#1c1c1e",
+              paddingVertical: 10,
+              paddingHorizontal: 15,
+              borderRadius: 10,
+            }}
+            onPress={() => {
+              setBusquedaSubModal("");
+              setTipoSelectorAbierto("filtroEquipoCat");
+            }}
+          >
+            <Text
+              style={{
+                color:
+                  filtroEquipamientoCat === "Todo Equipamiento"
+                    ? "#fff"
+                    : COLORES.azulHevy,
+                fontSize: 14,
+              }}
+            >
+              {filtroEquipamientoCat}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#1c1c1e",
+              paddingVertical: 10,
+              paddingHorizontal: 15,
+              borderRadius: 10,
+            }}
+            onPress={() => {
+              setBusquedaSubModal("");
+              setTipoSelectorAbierto("filtroMusculoCat");
+            }}
+          >
+            <Text
+              style={{
+                color:
+                  filtroMusculoCat === "Todos Músculos"
+                    ? "#fff"
+                    : COLORES.azulHevy,
+                fontSize: 14,
+              }}
+            >
+              {filtroMusculoCat}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* --- LISTA DE EJERCICIOS FILTRADOS --- */}
       <FlatList
-        data={TODOS_LOS_EJERCICIOS}
+        data={ejerciciosFiltrados}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 50 }}
+        ListEmptyComponent={
+          <Text style={{ color: "#666", textAlign: "center", marginTop: 20 }}>
+            No se encontraron ejercicios
+          </Text>
+        }
         renderItem={({ item }) => {
           const miniatura = item.imagenUrl || item.gifUrl;
           const esCustom = item.id.includes("custom");
 
           return (
             <View style={styles.itemEjercicio}>
-              {miniatura ? (
-                <Image source={{ uri: miniatura }} style={styles.imagenMini} />
-              ) : (
-                <View
-                  style={[
-                    styles.imagenMini,
-                    { backgroundColor: COLORES.fondoInput },
-                  ]}
-                />
-              )}
+              <View
+                style={[
+                  styles.imagenMini,
+                  {
+                    overflow: "hidden",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  },
+                ]}
+              >
+                {miniatura ? (
+                  <Image
+                    source={{ uri: miniatura }}
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="dumbbell"
+                    size={24}
+                    color={COLORES.grisOscuro}
+                  />
+                )}
+              </View>
+
               <View style={{ flex: 1 }}>
                 <Text style={styles.textoNombre}>{item.nombre}</Text>
                 <Text style={styles.textoMusculo}>
@@ -240,135 +415,356 @@ export default function PantallaCatalogo() {
         }}
       />
 
+      {/* --- MODAL DE CREACIÓN ESTILO HEVY --- */}
       <Modal
-        animationType="fade"
-        transparent={true}
+        animationType="slide"
+        transparent={false}
         visible={modalCrearEjercicioVisible}
         onRequestClose={() => setModalCrearEjercicioVisible(false)}
       >
-        <View style={styles.modalOscuro}>
-          <View style={styles.cajaCrearEjercicioScroll}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.tituloCajaDescanso}>
-                {ejercicioEditandoId
-                  ? "Editar Ejercicio"
-                  : "Crear Nuevo Ejercicio"}
-              </Text>
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingHorizontal: 20,
+              paddingTop: 50,
+              paddingBottom: 15,
+              borderBottomWidth: 1,
+              borderBottomColor: "#111",
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => setModalCrearEjercicioVisible(false)}
+              style={{ padding: 10, marginLeft: -10 }}
+            >
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={24}
+                color="#fff"
+              />
+            </TouchableOpacity>
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>
+              {ejercicioEditandoId ? "Editar Ejercicio" : "Crear Ejercicio"}
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: COLORES.azulHevy,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+              onPress={guardarEjercicioPersonalizado}
+            >
+              <Text style={{ color: "#fff", fontWeight: "bold" }}>Guardar</Text>
+            </TouchableOpacity>
+          </View>
 
-              <Text style={styles.labelFormulario}>Nombre (Obligatorio)</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <TouchableOpacity
+              style={{ alignItems: "center", marginTop: 30, marginBottom: 30 }}
+              onPress={seleccionarMedia}
+            >
+              <View
+                style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: 50,
+                  backgroundColor: "#1c1c1e",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  overflow: "hidden",
+                  borderWidth: 1,
+                  borderColor: "#333",
+                }}
+              >
+                {nuevoMediaUrl ? (
+                  <Image
+                    source={{ uri: nuevoMediaUrl }}
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="camera-plus"
+                    size={30}
+                    color="#fff"
+                  />
+                )}
+              </View>
+              <Text
+                style={{ color: COLORES.azulHevy, fontSize: 14, marginTop: 15 }}
+              >
+                Añadir recurso
+              </Text>
+            </TouchableOpacity>
+
+            <View style={{ paddingHorizontal: 20, marginBottom: 30 }}>
               <TextInput
-                style={styles.inputFormulario}
-                placeholderTextColor="#888"
+                style={{
+                  color: "#fff",
+                  fontSize: 20,
+                  fontWeight: "bold",
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#333",
+                  paddingBottom: 10,
+                }}
+                placeholder="Nombre de Ejercicio"
+                placeholderTextColor="#666"
                 value={nuevoNombreEjercicio}
                 onChangeText={setNuevoNombreEjercicio}
               />
+            </View>
 
-              <Text style={styles.labelFormulario}>
-                Imagen o GIF (Desde galería)
-              </Text>
+            <View style={{ paddingHorizontal: 20 }}>
               <TouchableOpacity
-                style={[styles.botonSubirFoto, { marginBottom: 15 }]}
-                onPress={seleccionarMedia}
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#111",
+                  paddingVertical: 15,
+                }}
+                onPress={() => setTipoSelectorAbierto("equipamiento")}
               >
-                <Text style={styles.textoSubirFoto}>
-                  {nuevoMediaUrl ? "Archivo seleccionado" : "Subir Archivo"}
+                <Text style={{ color: "#fff", fontSize: 16, marginBottom: 5 }}>
+                  Equipamiento
                 </Text>
-              </TouchableOpacity>
-
-              <Text style={styles.labelFormulario}>
-                Descripción / Tips (Opcional)
-              </Text>
-              <TextInput
-                style={[
-                  styles.inputFormulario,
-                  { height: 80, textAlignVertical: "top" },
-                ]}
-                multiline={true}
-                placeholderTextColor="#888"
-                value={nuevaDescripcion}
-                onChangeText={setNuevaDescripcion}
-              />
-
-              <Text style={styles.labelFormulario}>
-                Músculos Secundarios (Múltiple)
-              </Text>
-              <View style={styles.contenedorFiltrosCreacion}>
-                {MUSCULOS_CREACION.map((m) => {
-                  if (m === nuevoMusculoEjercicio) return null;
-                  const seleccionado = nuevosMusculosSecundarios.includes(m);
-                  return (
-                    <TouchableOpacity
-                      key={`secundario-${m}`}
-                      style={[
-                        styles.botonFiltroCreacion,
-                        seleccionado && styles.botonFiltroActivo,
-                      ]}
-                      onPress={() => toggleMusculoSecundario(m)}
-                    >
-                      <Text
-                        style={
-                          seleccionado
-                            ? styles.textoFiltroActivo
-                            : styles.textoFiltro
-                        }
-                      >
-                        {m}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <Text
-                style={[
-                  styles.labelFormulario,
-                  { marginTop: 10, marginBottom: 10 },
-                ]}
-              >
-                Músculo Principal:
-              </Text>
-              <View style={styles.contenedorFiltrosCreacion}>
-                {MUSCULOS_CREACION.map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[
-                      styles.botonFiltroCreacion,
-                      nuevoMusculoEjercicio === m && styles.botonFiltroActivo,
-                    ]}
-                    onPress={() => setNuevoMusculoEjercicio(m)}
-                  >
-                    <Text
-                      style={
-                        nuevoMusculoEjercicio === m
-                          ? styles.textoFiltroActivo
-                          : styles.textoFiltro
-                      }
-                    >
-                      {m}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={styles.filaBotonesCrear}>
-                <TouchableOpacity
-                  style={styles.botonCancelarCrear}
-                  onPress={() => {
-                    setModalCrearEjercicioVisible(false);
-                    setEjercicioEditandoId(null);
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
                   }}
                 >
-                  <Text style={styles.textoCancelarCrear}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.botonGuardarCrear}
-                  onPress={guardarEjercicioPersonalizado}
+                  <Text
+                    style={{
+                      color:
+                        nuevoEquipamiento === "Ninguno"
+                          ? COLORES.azulHevy
+                          : "#fff",
+                      fontSize: 14,
+                    }}
+                  >
+                    {nuevoEquipamiento === "Ninguno"
+                      ? "Seleccionar"
+                      : nuevoEquipamiento}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={20}
+                    color="#666"
+                  />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#111",
+                  paddingVertical: 15,
+                }}
+                onPress={() => setTipoSelectorAbierto("primario")}
+              >
+                <Text style={{ color: "#fff", fontSize: 16, marginBottom: 5 }}>
+                  Grupo Muscular Primario
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
                 >
-                  <Text style={styles.textoGuardar}>Guardar</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+                  <Text style={{ color: "#fff", fontSize: 14 }}>
+                    {nuevoMusculoEjercicio}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={20}
+                    color="#666"
+                  />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#111",
+                  paddingVertical: 15,
+                }}
+                onPress={() => setTipoSelectorAbierto("secundario")}
+              >
+                <Text style={{ color: "#fff", fontSize: 16, marginBottom: 5 }}>
+                  Otros músculos
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        nuevosMusculosSecundarios.length === 0
+                          ? COLORES.azulHevy
+                          : "#fff",
+                      fontSize: 14,
+                    }}
+                  >
+                    {nuevosMusculosSecundarios.length === 0
+                      ? "Seleccionar (opcional)"
+                      : nuevosMusculosSecundarios.join(", ")}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={20}
+                    color="#666"
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* --- SUB-MODAL DESLIZABLE (EQUIPO / MÚSCULOS / FILTROS) --- */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={!!tipoSelectorAbierto}
+        onRequestClose={() => setTipoSelectorAbierto(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingHorizontal: 20,
+              paddingTop: 50,
+              paddingBottom: 15,
+              borderBottomWidth: 1,
+              borderBottomColor: "#111",
+            }}
+          >
+            <TouchableOpacity onPress={() => setTipoSelectorAbierto(null)}>
+              <Text style={{ color: COLORES.azulHevy, fontSize: 16 }}>
+                Cancelar
+              </Text>
+            </TouchableOpacity>
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>
+              {tipoSelectorAbierto === "equipamiento" ||
+              tipoSelectorAbierto === "filtroEquipoCat"
+                ? "Equipamiento"
+                : tipoSelectorAbierto === "primario" ||
+                    tipoSelectorAbierto === "filtroMusculoCat"
+                  ? "Grupo Muscular"
+                  : "Músculos Secundarios"}
+            </Text>
+            <TouchableOpacity onPress={() => setTipoSelectorAbierto(null)}>
+              <Text
+                style={{
+                  color: COLORES.azulHevy,
+                  fontSize: 16,
+                  fontWeight: "bold",
+                }}
+              >
+                Listo
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          <View
+            style={{ paddingHorizontal: 20, marginTop: 15, marginBottom: 15 }}
+          >
+            <View
+              style={{
+                backgroundColor: "#1c1c1e",
+                borderRadius: 10,
+                paddingHorizontal: 15,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <MaterialCommunityIcons
+                name="magnify"
+                size={20}
+                color="#666"
+                style={{ marginRight: 10 }}
+              />
+              <TextInput
+                placeholder="Buscar"
+                placeholderTextColor="#666"
+                style={{ color: "#fff", flex: 1 }}
+                value={busquedaSubModal}
+                onChangeText={setBusquedaSubModal}
+              />
+            </View>
+          </View>
+
+          <FlatList
+            data={(tipoSelectorAbierto === "equipamiento" ||
+            tipoSelectorAbierto === "filtroEquipoCat"
+              ? EQUIPAMIENTO
+              : GRUPOS_MUSCULARES
+            ).filter((item) =>
+              item.toLowerCase().includes(busquedaSubModal.toLowerCase()),
+            )}
+            keyExtractor={(item) => item}
+            contentContainerStyle={{ paddingBottom: 50 }}
+            renderItem={({ item }) => {
+              let estaSeleccionado = false;
+              if (tipoSelectorAbierto === "equipamiento")
+                estaSeleccionado = item === nuevoEquipamiento;
+              if (tipoSelectorAbierto === "primario")
+                estaSeleccionado = item === nuevoMusculoEjercicio;
+              if (tipoSelectorAbierto === "secundario")
+                estaSeleccionado = nuevosMusculosSecundarios.includes(item);
+              if (tipoSelectorAbierto === "filtroEquipoCat")
+                estaSeleccionado = item === filtroEquipamientoCat;
+              if (tipoSelectorAbierto === "filtroMusculoCat")
+                estaSeleccionado = item === filtroMusculoCat;
+
+              return (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    paddingVertical: 18,
+                    paddingHorizontal: 20,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#111",
+                  }}
+                  onPress={() => {
+                    if (tipoSelectorAbierto === "equipamiento") {
+                      setNuevoEquipamiento(item);
+                      setTipoSelectorAbierto(null);
+                    } else if (tipoSelectorAbierto === "primario") {
+                      setNuevoMusculoEjercicio(item);
+                      setTipoSelectorAbierto(null);
+                    } else if (tipoSelectorAbierto === "secundario") {
+                      toggleMusculoSecundario(item);
+                    } else if (tipoSelectorAbierto === "filtroEquipoCat") {
+                      setFiltroEquipamientoCat(item);
+                      setTipoSelectorAbierto(null);
+                    } else if (tipoSelectorAbierto === "filtroMusculoCat") {
+                      setFiltroMusculoCat(item);
+                      setTipoSelectorAbierto(null);
+                    }
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 16 }}>{item}</Text>
+                  {estaSeleccionado && (
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={24}
+                      color={COLORES.azulHevy}
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+          />
         </View>
       </Modal>
     </View>
@@ -404,40 +800,31 @@ const styles = StyleSheet.create({
   botonCrearHeader: {
     paddingHorizontal: 10,
   },
-  textoCrearHeader: {
-    color: COLORES.azulHevy,
-    fontSize: 32,
-    fontWeight: "400",
-    marginTop: -4,
-  },
   itemEjercicio: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.05)",
   },
   imagenMini: {
     width: 50,
     height: 50,
-    borderRadius: 12,
+    borderRadius: 25,
     marginRight: 15,
     backgroundColor: "rgba(255,255,255,0.05)",
   },
   textoNombre: {
     color: COLORES.textoBlanco,
-    fontSize: 14,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
   },
   textoMusculo: {
     color: COLORES.grisOscuro,
-    fontSize: 11,
-    fontWeight: "800",
-    marginTop: 4,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    fontSize: 13,
+    fontWeight: "500",
   },
   filaAccionesDB: {
     flexDirection: "row",
@@ -457,132 +844,6 @@ const styles = StyleSheet.create({
     color: COLORES.rojoPeligro,
     fontWeight: "bold",
     fontSize: 11,
-    letterSpacing: 1,
-  },
-
-  // Estilos del Modal
-  modalOscuro: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.85)",
-  },
-  cajaCrearEjercicioScroll: {
-    backgroundColor: "#1c1c1e",
-    width: "100%",
-    maxHeight: "85%",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 25,
-  },
-  tituloCajaDescanso: {
-    color: COLORES.textoBlanco,
-    fontSize: 14,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    marginBottom: 25,
-    textAlign: "center",
-    letterSpacing: 1.5,
-  },
-  labelFormulario: {
-    color: COLORES.grisClaro,
-    fontSize: 11,
-    marginBottom: 8,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  inputFormulario: {
-    backgroundColor: "#121212",
-    color: COLORES.textoBlanco,
-    padding: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-    fontSize: 14,
-    marginBottom: 20,
-  },
-  botonSubirFoto: {
-    backgroundColor: "transparent",
-    padding: 18,
-    borderRadius: 20,
-    alignItems: "center",
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  textoSubirFoto: {
-    color: COLORES.grisClaro,
-    fontWeight: "900",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  contenedorFiltrosCreacion: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 25,
-  },
-  botonFiltroCreacion: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  botonFiltroActivo: {
-    backgroundColor: COLORES.azulHevy,
-    borderColor: COLORES.azulHevy,
-  },
-  textoFiltro: {
-    color: COLORES.grisClaro,
-    fontWeight: "900",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  textoFiltroActivo: {
-    color: COLORES.textoBlanco,
-    fontWeight: "900",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  filaBotonesCrear: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 15,
-  },
-  botonCancelarCrear: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    flex: 1,
-    paddingVertical: 15,
-    borderRadius: 20,
-    alignItems: "center",
-    marginRight: 10,
-  },
-  textoCancelarCrear: {
-    color: COLORES.grisClaro,
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  botonGuardarCrear: {
-    backgroundColor: COLORES.azulHevy,
-    flex: 1,
-    paddingVertical: 15,
-    borderRadius: 20,
-    alignItems: "center",
-  },
-  textoGuardar: {
-    color: COLORES.textoBlanco,
-    fontWeight: "900",
-    fontSize: 12,
-    textTransform: "uppercase",
     letterSpacing: 1,
   },
 });
